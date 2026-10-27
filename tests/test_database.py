@@ -6,7 +6,14 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
-from app.database import initialize_database
+from app.database import (
+    completed_days,
+    initialize_database,
+    mark_read,
+    reminders_enabled,
+    register_user,
+    set_reminders_enabled,
+)
 
 
 class DatabaseInitializationTests(unittest.TestCase):
@@ -25,6 +32,22 @@ class DatabaseInitializationTests(unittest.TestCase):
 
             self.assertEqual(table, ("users",))
             self.assertTrue({"telegram_user_id", "created_at", "reminders_enabled"} <= columns)
+
+    def test_registration_completion_and_reminder_settings_are_per_user(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "daily.sqlite3"
+            initialize_database(database_path)
+
+            register_user(database_path, 10)
+            register_user(database_path, 10)
+            self.assertTrue(mark_read(database_path, 10, 17))
+            self.assertFalse(mark_read(database_path, 10, 17))
+            self.assertEqual(completed_days(database_path, 10), (17,))
+            self.assertEqual(completed_days(database_path, 11), ())
+
+            set_reminders_enabled(database_path, 10, False)
+            self.assertFalse(reminders_enabled(database_path, 10))
+            self.assertTrue(reminders_enabled(database_path, 11))
 
 
 if __name__ == "__main__":

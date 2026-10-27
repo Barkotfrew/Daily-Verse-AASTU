@@ -28,7 +28,17 @@ Edit `.env` and set `BOT_TOKEN` when you have created the bot. Keep `.env` priva
 python -m app.main
 ```
 
-This creates `data/daily_verse.sqlite3` and the initial `users` table. Initialization is safe to repeat. The database is local development data and is ignored by Git.
+This creates `data/daily_verse.sqlite3` and the user and reading-completion tables. Initialization is safe to repeat. The database is local development data and is ignored by Git.
+
+## Start the Telegram bot
+
+Set `BOT_TOKEN` in `.env`, then run:
+
+```powershell
+python -m app.main
+```
+
+The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. Daily reminders are not scheduled yet, and chapter reading clearly reports that verified Bible text is not connected.
 
 ## Run checks
 
