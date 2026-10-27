@@ -1,0 +1,25 @@
+{
+  "fixture_only": true,
+  "notice": "Synthetic test strings only. This is not Bible scripture.",
+  "books": [
+    {
+      "id": "genesis",
+      "name": "Genesis (fixture)",
+      "chapters": [
+        {
+          "number": 1,
+          "verses": [
+            {"start": 1, "text": "FIXTURE TEXT 1 — synthetic test content, not scripture."},
+            {"start": 2, "end": 3, "text": "FIXTURE TEXT 2-3 — synthetic combined range, not scripture."}
+          ]
+        },
+        {
+          "number": 2,
+          "verses": [
+            {"start": 1, "text": "FIXTURE TEXT chapter two — synthetic test content, not scripture."}
+          ]
+        }
+      ]
+    }
+  ]
+}
