@@ -38,7 +38,7 @@ Set `BOT_TOKEN` in `.env`, then run:
 python -m app.main
 ```
 
-The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. Daily reminders are not scheduled yet, and chapter reading clearly reports that verified Bible text is not connected.
+The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. EAT is represented as a fixed UTC+3 offset, so Windows does not need a separate timezone database. Daily reminders are not scheduled yet, and chapter reading clearly reports that verified Bible text is not connected.
 
 ## Run checks
 

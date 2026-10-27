@@ -1,8 +1,6 @@
 """Telegram commands, menu buttons, and per-user callbacks."""
 
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
@@ -17,9 +15,8 @@ from app.database import (
     set_reminders_enabled,
 )
 from app.reading_plan import ReadingPlan
-from app.readings import entry_for_date, format_reading_entry
+from app.readings import eat_date, entry_for_date, format_reading_entry
 
-EAT = ZoneInfo("Africa/Addis_Ababa")
 MAIN_MENU = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Today's Reading"), KeyboardButton(text="Reading Plan")],
@@ -56,7 +53,7 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
     router = Router(name="daily-verse")
 
     async def send_today(message: Message) -> None:
-        today = datetime.now(EAT).date()
+        today = eat_date()
         entry = entry_for_date(plan, today)
         if entry is None:
             await message.answer(
@@ -70,7 +67,7 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
 
     async def send_plan(message: Message, day: int | None = None) -> None:
         if day is None:
-            today_entry = entry_for_date(plan, datetime.now(EAT).date())
+            today_entry = entry_for_date(plan, eat_date())
             day = today_entry.day if today_entry else 1
         entry = plan.get_day(day)
         if entry is None:
