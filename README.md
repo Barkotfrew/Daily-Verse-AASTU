@@ -42,6 +42,7 @@ python -m unittest discover -s tests -v
 - SQLite schema initialization is repeatable.
 - The supplied 231-day reading plan loads from JSON and validates continuous day numbering and Gregorian dates.
 - A normalized Bible JSON access layer supports full chapters, individual verses, and merged verse-number ranges. Tests use explicitly synthetic fixture strings, never Bible quotations.
+- A shared reference parser maps English and Amharic names for all 66 Protestant books to canonical IDs and parses chapter and verse ranges.
 - Bible text, Telegram handlers, and reminder scheduling are not included yet.
 
 ## Bible data source review
