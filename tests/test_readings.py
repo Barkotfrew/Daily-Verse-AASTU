@@ -4,7 +4,14 @@ from datetime import date, datetime, timezone
 import unittest
 
 from app.reading_plan import load_reading_plan
-from app.readings import eat_date, entry_for_date, format_reading_entry
+from app.readings import (
+    eat_date,
+    entry_for_date,
+    format_plan_page,
+    format_reading_entry,
+    page_for_day,
+    plan_page_count,
+)
 
 
 class ReadingServiceTests(unittest.TestCase):
@@ -37,6 +44,33 @@ class ReadingServiceTests(unittest.TestCase):
         self.assertIn("ጥቅምት 17", text)
         self.assertIn("2026-10-27", text)
         self.assertIn("ዘፍጥረት 16-18", text)
+
+    def test_plan_overview_pages_cover_all_entries_in_order(self) -> None:
+        first_page = format_plan_page(self.plan, 1)
+        second_page = format_plan_page(self.plan, 2)
+        last_page = format_plan_page(self.plan, plan_page_count(self.plan))
+
+        self.assertEqual(plan_page_count(self.plan), 17)
+        self.assertEqual(page_for_day(17), 2)
+        self.assertIn("Day 1 ·", first_page)
+        self.assertIn("Day 14 ·", first_page)
+        self.assertNotIn("Day 15 ·", first_page)
+        self.assertIn("Day 15 ·", second_page)
+        self.assertIn("Day 28 ·", second_page)
+        self.assertIn("Day 231 ·", last_page)
+        self.assertLess(
+            max(
+                len(format_plan_page(self.plan, page))
+                for page in range(1, plan_page_count(self.plan) + 1)
+            ),
+            4096,
+        )
+
+    def test_plan_overview_rejects_invalid_page(self) -> None:
+        with self.assertRaises(ValueError):
+            format_plan_page(self.plan, 0)
+        with self.assertRaises(ValueError):
+            format_plan_page(self.plan, 18)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,15 @@ from app.database import (
     set_reminders_enabled,
 )
 from app.reading_plan import ReadingPlan
-from app.readings import eat_date, entry_for_date, format_reading_entry
+from app.readings import (
+    PLAN_PAGE_SIZE,
+    eat_date,
+    entry_for_date,
+    format_plan_page,
+    format_reading_entry,
+    page_for_day,
+    plan_page_count,
+)
 
 MAIN_MENU = ReplyKeyboardMarkup(
     keyboard=[
@@ -32,7 +40,10 @@ def _entry_keyboard(day: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}")],
             [InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}")],
-            [InlineKeyboardButton(text="View Reading Plan", callback_data=f"plan:{day}")],
+            [InlineKeyboardButton(
+                text="View Reading Plan",
+                callback_data=f"planpage:{page_for_day(day, PLAN_PAGE_SIZE)}",
+            )],
         ]
     )
 
@@ -43,10 +54,38 @@ def _plan_keyboard(day: int, final_day: int) -> InlineKeyboardMarkup:
         row.append(InlineKeyboardButton(text="← Previous", callback_data=f"plan:{day - 1}"))
     if day < final_day:
         row.append(InlineKeyboardButton(text="Next →", callback_data=f"plan:{day + 1}"))
-    return InlineKeyboardMarkup(inline_keyboard=[row, [
-        InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}"),
-        InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}"),
-    ]])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            row,
+            [InlineKeyboardButton(
+                text="All Plan",
+                callback_data=f"planpage:{page_for_day(day, PLAN_PAGE_SIZE)}",
+            )],
+            [
+                InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}"),
+                InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}"),
+            ],
+        ]
+    )
+
+
+def _overview_keyboard(page: int, total_pages: int, plan: ReadingPlan) -> InlineKeyboardMarkup:
+    first_day = (page - 1) * PLAN_PAGE_SIZE + 1
+    last_day = min(page * PLAN_PAGE_SIZE, plan.final_day)
+    rows = []
+    day_buttons = [
+        InlineKeyboardButton(text=f"Day {day}", callback_data=f"plan:{day}")
+        for day in range(first_day, last_day + 1)
+    ]
+    rows.extend(day_buttons[index:index + 2] for index in range(0, len(day_buttons), 2))
+    navigation = []
+    if page > 1:
+        navigation.append(InlineKeyboardButton(text="← Previous", callback_data=f"planpage:{page - 1}"))
+    if page < total_pages:
+        navigation.append(InlineKeyboardButton(text="Next →", callback_data=f"planpage:{page + 1}"))
+    if navigation:
+        rows.append(navigation)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_router(database_path: Path, plan: ReadingPlan) -> Router:
@@ -66,16 +105,14 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
         )
 
     async def send_plan(message: Message, day: int | None = None) -> None:
-        if day is None:
-            today_entry = entry_for_date(plan, eat_date())
-            day = today_entry.day if today_entry else 1
-        entry = plan.get_day(day)
-        if entry is None:
+        if day is not None and plan.get_day(day) is None:
             await message.answer(f"Choose a plan day from 1 to {plan.final_day}.")
             return
+        page = page_for_day(day) if day is not None else 1
+        total_pages = plan_page_count(plan)
         await message.answer(
-            f"Reading Plan · {plan.total_days} days\n" + format_reading_entry(entry),
-            reply_markup=_plan_keyboard(entry.day, plan.final_day),
+            format_plan_page(plan, page),
+            reply_markup=_overview_keyboard(page, total_pages, plan),
         )
 
     @router.message(Command("start"))
@@ -108,6 +145,24 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
     async def plan_button(message: Message) -> None:
         await send_plan(message)
 
+    @router.callback_query(F.data.startswith("planpage:"))
+    async def browse_plan_page(callback: CallbackQuery) -> None:
+        try:
+            page = int(callback.data.split(":", 1)[1])
+        except (AttributeError, ValueError):
+            await callback.answer("That plan page is invalid.", show_alert=True)
+            return
+        total_pages = plan_page_count(plan)
+        if not 1 <= page <= total_pages:
+            await callback.answer("That page is outside the reading plan.", show_alert=True)
+            return
+        if callback.message:
+            await callback.message.edit_text(
+                format_plan_page(plan, page),
+                reply_markup=_overview_keyboard(page, total_pages, plan),
+            )
+        await callback.answer()
+
     @router.callback_query(F.data.startswith("plan:"))
     async def browse_plan(callback: CallbackQuery) -> None:
         try:
@@ -121,7 +176,7 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
             return
         if callback.message:
             await callback.message.edit_text(
-                f"Reading Plan · {plan.total_days} days\n" + format_reading_entry(entry),
+                "Reading Plan · selected day\n" + format_reading_entry(entry),
                 reply_markup=_plan_keyboard(day, plan.final_day),
             )
         await callback.answer()
@@ -211,7 +266,8 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
     @router.message(F.text == "Help")
     async def help_message(message: Message) -> None:
         await message.answer(
-            "Use /today to see the shared reading, /plan 17 to browse a day, "
+            "Use /today to see the shared reading, /plan to browse the full plan "
+            "or /plan 17 to open the page containing Day 17, "
             "and /progress to see your private completion record. "
             "You can mark earlier readings complete from the plan."
         )
