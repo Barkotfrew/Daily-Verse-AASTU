@@ -35,6 +35,15 @@ class MiniAppBuildTests(unittest.TestCase):
             self.assertEqual(index["books"][0]["chapters"], [1])
             self.assertFalse(genesis["complete"])
             self.assertEqual(genesis["verses"][0]["text"], "synthetic fixture text")
+            readings = json.loads(
+                (output / "assets" / "readings.json").read_text(encoding="utf-8")
+            )
+            day_18 = next(entry for entry in readings["entries"] if entry["day"] == 18)
+            self.assertEqual(
+                [(passage["book_id"], passage["chapter"]) for passage in day_18["passages"]],
+                [("GEN", 19), ("GEN", 20), ("GEN", 21)],
+            )
+            self.assertEqual(len(readings["entries"]), 231)
             self.assertTrue((output / "index.html").is_file())
 
 

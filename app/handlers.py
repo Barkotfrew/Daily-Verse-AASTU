@@ -48,11 +48,20 @@ MAIN_MENU = ReplyKeyboardMarkup(
 )
 
 
-def _entry_keyboard(day: int) -> InlineKeyboardMarkup:
+def _read_chapters_button(day: int, mini_app_url: str, in_private_chat: bool) -> InlineKeyboardButton:
+    if mini_app_url and in_private_chat:
+        return InlineKeyboardButton(
+            text="Read Chapters",
+            web_app=WebAppInfo(url=f"{mini_app_url}/?{urlencode({'day': day})}"),
+        )
+    return InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}")
+
+
+def _entry_keyboard(day: int, mini_app_url: str, in_private_chat: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}")],
-            [InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}")],
+            [_read_chapters_button(day, mini_app_url, in_private_chat)],
             [InlineKeyboardButton(
                 text="View Reading Plan",
                 callback_data=f"planpage:{page_for_day(day, PLAN_PAGE_SIZE)}",
@@ -61,7 +70,12 @@ def _entry_keyboard(day: int) -> InlineKeyboardMarkup:
     )
 
 
-def _plan_keyboard(day: int, final_day: int) -> InlineKeyboardMarkup:
+def _plan_keyboard(
+    day: int,
+    final_day: int,
+    mini_app_url: str,
+    in_private_chat: bool,
+) -> InlineKeyboardMarkup:
     row = []
     if day > 1:
         row.append(InlineKeyboardButton(text="← Previous", callback_data=f"plan:{day - 1}"))
@@ -76,7 +90,7 @@ def _plan_keyboard(day: int, final_day: int) -> InlineKeyboardMarkup:
             )],
             [
                 InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}"),
-                InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}"),
+                _read_chapters_button(day, mini_app_url, in_private_chat),
             ],
         ]
     )
@@ -119,7 +133,11 @@ def build_router(
             return
         await message.answer(
             "Today's Reading\n" + format_reading_entry(entry),
-            reply_markup=_entry_keyboard(entry.day),
+            reply_markup=_entry_keyboard(
+                entry.day,
+                mini_app_url,
+                message.chat.type == "private",
+            ),
         )
 
     async def send_plan(message: Message, day: int | None = None) -> None:
@@ -254,7 +272,12 @@ def build_router(
         if callback.message:
             await callback.message.edit_text(
                 "Reading Plan · selected day\n" + format_reading_entry(entry),
-                reply_markup=_plan_keyboard(day, plan.final_day),
+                reply_markup=_plan_keyboard(
+                    day,
+                    plan.final_day,
+                    mini_app_url,
+                    callback.message.chat.type == "private",
+                ),
             )
         await callback.answer()
 

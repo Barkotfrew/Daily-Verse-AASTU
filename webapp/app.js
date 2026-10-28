@@ -10,6 +10,9 @@
   const nextButton = document.querySelector("#next-button");
   const status = document.querySelector("#status");
   const content = document.querySelector("#chapter-content");
+  const readerTitle = document.querySelector("#reader-title");
+  const selectors = document.querySelector("#selectors");
+  const chapterNav = document.querySelector("#chapter-nav");
   let books = [];
 
   function setStatus(message, isError = false) {
@@ -59,6 +62,79 @@
     return verse;
   }
 
+  function appendChapter(passage, chapter) {
+    const heading = document.createElement("h3");
+    heading.className = "chapter-title";
+    heading.textContent = `${passage.english} ${passage.chapter} · ${passage.amharic} ${passage.chapter}`;
+    content.append(heading, ...chapter.verses.map(makeVerse));
+  }
+
+  async function loadChapterAsset(passage) {
+    const asset = new URL(
+      `assets/chapters/${passage.book_id}/${passage.chapter}.json`,
+      document.baseURI,
+    );
+    const response = await fetch(asset);
+    if (!response.ok) throw new Error("Chapter data is unavailable.");
+    return response.json();
+  }
+
+  async function openReadingDay(dayNumber) {
+    const params = new URLSearchParams(location.search);
+    params.delete("book");
+    params.delete("chapter");
+    history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    selectors.hidden = true;
+    chapterNav.hidden = true;
+    content.replaceChildren();
+    setStatus(`Loading Day ${dayNumber}…`);
+    try {
+      const response = await fetch(new URL("assets/readings.json", document.baseURI));
+      if (!response.ok) throw new Error("The reading plan is unavailable.");
+      const plan = await response.json();
+      const entry = plan.entries.find((row) => row.day === dayNumber);
+      if (!entry) {
+        setStatus("This day is outside the reading plan.", true);
+        return;
+      }
+      readerTitle.textContent = `Day ${entry.day} · ${entry.gregorian_date}`;
+      const planLabel = document.createElement("p");
+      planLabel.className = "reading-label";
+      planLabel.textContent = `${entry.ethiopian_date} · ${entry.reading}`;
+      content.append(planLabel);
+      setStatus("Loading assigned chapters…");
+
+      const loaded = await Promise.all(entry.passages.map(async (passage) => {
+        try {
+          return { passage, chapter: await loadChapterAsset(passage), error: "" };
+        } catch {
+          return { passage, chapter: null, error: "unavailable" };
+        }
+      }));
+      const missing = [];
+      for (const item of loaded) {
+        if (item.error || !item.chapter || !item.chapter.complete || !item.chapter.verses.length) {
+          missing.push(`${item.passage.english} ${item.passage.chapter}`);
+          continue;
+        }
+        appendChapter(item.passage, item.chapter);
+      }
+      if (missing.length) {
+        const warning = document.createElement("p");
+        warning.className = "reading-warning";
+        warning.textContent = `Could not show complete text for: ${missing.join(", ")}.`;
+        content.prepend(warning);
+        setStatus("Some assigned chapters are unavailable in the source data.", true);
+      } else {
+        setStatus("");
+      }
+      if (!loaded.length) setStatus("No chapters are assigned to this plan day.", true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      setStatus("Could not load this day's reading. Please try again.", true);
+    }
+  }
+
   async function openChapter() {
     const book = currentBook();
     const chapterNumber = Number(chapterSelect.value);
@@ -71,10 +147,13 @@
     setStatus("Loading chapter…");
     openButton.disabled = true;
     try {
-      const asset = new URL(`assets/chapters/${book.id}/${chapterNumber}.json`, document.baseURI);
-      const response = await fetch(asset);
-      if (!response.ok) throw new Error("Chapter data is unavailable.");
-      const chapter = await response.json();
+      const passage = {
+        book_id: book.id,
+        english: book.english,
+        amharic: book.amharic,
+        chapter: chapterNumber,
+      };
+      const chapter = await loadChapterAsset(passage);
       if (!chapter.complete) {
         setStatus("This chapter has missing source text and cannot be shown as complete.", true);
         return;
@@ -83,10 +162,7 @@
         setStatus("No verse text is available for this chapter.", true);
         return;
       }
-      const heading = document.createElement("h3");
-      heading.className = "chapter-title";
-      heading.textContent = `${book.english} ${chapterNumber} · ${book.amharic} ${chapterNumber}`;
-      content.append(heading, ...chapter.verses.map(makeVerse));
+      appendChapter(passage, chapter);
       setStatus("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -110,7 +186,20 @@
         bookSelect.append(option);
       }
       const params = new URLSearchParams(location.search);
+      const dayParameter = params.get("day");
+      if (dayParameter !== null) {
+        const dayNumber = Number(dayParameter);
+        if (!Number.isInteger(dayNumber) || dayNumber < 1) {
+          setStatus("This reading day is invalid.", true);
+          return;
+        }
+        await openReadingDay(dayNumber);
+        return;
+      }
       const requestedBook = params.get("book");
+      readerTitle.textContent = "Read a chapter";
+      selectors.hidden = false;
+      chapterNav.hidden = false;
       bookSelect.value = books.some((book) => book.id === requestedBook) ? requestedBook : "GEN";
       if (!currentBook()) bookSelect.selectedIndex = 0;
       selectAvailableChapter(params.get("chapter") ?? "1");

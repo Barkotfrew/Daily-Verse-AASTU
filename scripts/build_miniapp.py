@@ -9,16 +9,22 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.bible import JsonBibleRepository
-from app.references import BOOKS
+from app.reading_plan import DEFAULT_PLAN_PATH, load_reading_plan
+from app.references import BOOKS, parse_reading_assignment
 
 SOURCE_BIBLE = ROOT / "data" / "bible" / "source" / "amharic_bible.json"
 WEBAPP_SOURCE = ROOT / "webapp"
 DEFAULT_OUTPUT = WEBAPP_SOURCE / "dist"
 
 
-def build_site(source_bible: Path = SOURCE_BIBLE, output: Path = DEFAULT_OUTPUT) -> tuple[int, int]:
-    """Build web assets, returning (book count, chapter count)."""
+def build_site(
+    source_bible: Path = SOURCE_BIBLE,
+    output: Path = DEFAULT_OUTPUT,
+    source_plan: Path = DEFAULT_PLAN_PATH,
+) -> tuple[int, int]:
+    """Build static assets and return the number of books and Bible chapters."""
     bible = JsonBibleRepository(source_bible)
+    plan = load_reading_plan(source_plan)
     output = output.resolve()
     if output.exists():
         if output != DEFAULT_OUTPUT.resolve():
@@ -64,9 +70,31 @@ def build_site(source_bible: Path = SOURCE_BIBLE, output: Path = DEFAULT_OUTPUT)
         json.dumps({"language": "amharic", "books": books_index}, ensure_ascii=False),
         encoding="utf-8",
     )
+    readings = []
+    for entry in plan.entries:
+        passages = parse_reading_assignment(entry.reading)
+        readings.append({
+            "day": entry.day,
+            "ethiopian_date": entry.ethiopian_date,
+            "gregorian_date": entry.gregorian_date.isoformat(),
+            "reading": entry.reading,
+            "passages": [
+                {
+                    "book_id": passage.book.id,
+                    "english": passage.book.english,
+                    "amharic": passage.book.amharic,
+                    "chapter": passage.chapter,
+                }
+                for passage in passages
+            ],
+        })
+    (assets / "readings.json").write_text(
+        json.dumps({"entries": readings}, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
     return len(books_index), chapter_count
 
 
 if __name__ == "__main__":
     book_count, chapter_count = build_site()
-    print(f"Built Mini App for {book_count} books and {chapter_count} available chapters.")
+    print(f"Built Mini App for {book_count} books, {chapter_count} Bible chapters, and the full reading plan.")

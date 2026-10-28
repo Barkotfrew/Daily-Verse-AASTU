@@ -72,17 +72,19 @@ Inline reference search accepts English and Amharic book names, for example `Gen
 
 Inline mode is enabled in BotFather with `/setinline`. Test in Telegram by typing `@AASTU_ECSF_DailyVerse_2026Bot Genesis 1:1` or `@AASTU_ECSF_DailyVerse_2026Bot ዘፍጥረት 1`. Inline mode requires the bot to be running and the data file to be installed.
 
-## GitHub Pages Mini App
+## Cloudflare Pages Mini App
 
-The project repository is public, so GitHub Pages is available on GitHub Free. The published Mini App URL for this repository is `https://barkotfrew.github.io/Daily-Verse-AASTU/` once Pages is enabled. In GitHub, open **Settings → Pages** and choose **GitHub Actions** as the build and deployment source. The workflow `.github/workflows/deploy-miniapp.yml` builds and publishes the static reader from `main`.
+The Mini App is hosted separately from the personal GitHub Pages site. The Cloudflare Pages project uses the GitHub repository with build command `python scripts/build_miniapp.py` and output directory `webapp/dist`. Cloudflare's Git integration rebuilds the static reader when changes are pushed.
 
-The builder splits Bible text into chapter-sized assets under the generated `webapp/dist` directory, so opening one chapter does not download the full dataset. To preview locally:
+The builder creates chapter-sized assets and a copy of the shared reading plan under the generated `webapp/dist` directory. The `Read Chapters` button in a private chat opens the Mini App directly on that day's assigned chapters. For inline chapter searches, its button opens the requested chapter. The app fetches only the chapters it needs.
+
+To preview locally:
 
 ```powershell
 python scripts/build_miniapp.py
 python -m http.server 8000 --directory webapp/dist
 ```
 
-Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Pages succeeds, set `MINI_APP_URL=https://barkotfrew.github.io/Daily-Verse-AASTU` in the bot host's environment and restart the bot. Until then, inline chapter searches keep their private-chat fallback. The Bible text and Mini App are public; verify text redistribution rights before enabling public deployment.
+Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare deploys, set `MINI_APP_URL=https://daily-verse-aastu.pages.dev` in the bot host's environment and restart the bot. The Bible text and Mini App are public; verify text redistribution rights before public release.
 
 Next milestone: enable GitHub Pages and test the chapter button in Telegram, then implement daily reminders. English Bible text still requires a separately licensed source.

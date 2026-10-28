@@ -67,6 +67,8 @@ button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
 .status { min-height: 1.3em; margin: 16px 2px 0; color: var(--muted); font-size: .9rem; }
 .status.error { color: #b44235; }
 .chapter-content { margin-top: 12px; }
+.reading-label { margin: 10px 2px 18px; color: var(--muted); line-height: 1.6; }
+.reading-warning { padding: 12px; border-radius: 12px; background: #b4423518; color: #b44235; line-height: 1.5; }
 .chapter-title { margin: 0 0 18px; font-size: 1.35rem; }
 .verse { display: grid; grid-template-columns: 2.4rem 1fr; gap: 10px; padding: 11px 2px; border-top: 1px solid var(--line); }
 .verse-number { color: var(--accent); font-size: .82rem; font-weight: 750; padding-top: 3px; }
