@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 class Settings:
     bot_token: str
     database_path: Path
+    mini_app_url: str = ""
 
 
 def load_settings() -> Settings:
@@ -23,7 +24,15 @@ def load_settings() -> Settings:
                 continue
             key, value = line.split("=", 1)
             os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    mini_app_url = os.getenv("MINI_APP_URL", "").strip().rstrip("/")
+    if mini_app_url:
+        from urllib.parse import urlsplit
+
+        parsed_url = urlsplit(mini_app_url)
+        if parsed_url.scheme != "https" or not parsed_url.netloc or parsed_url.query or parsed_url.fragment:
+            raise ValueError("MINI_APP_URL must be an HTTPS site URL without query or fragment")
     return Settings(
         bot_token=os.getenv("BOT_TOKEN", "").strip(),
         database_path=Path(os.getenv("DATABASE_PATH", "data/daily_verse.sqlite3")),
+        mini_app_url=mini_app_url,
     )

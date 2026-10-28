@@ -28,7 +28,7 @@ async def main() -> None:
     bible = JsonBibleRepository(bible_path) if bible_path.is_file() else None
     bot = Bot(token=settings.bot_token)
     dispatcher = Dispatcher()
-    dispatcher.include_router(build_router(database_path, plan, bible))
+    dispatcher.include_router(build_router(database_path, plan, bible, settings.mini_app_url))
     try:
         await dispatcher.start_polling(bot)
     finally:

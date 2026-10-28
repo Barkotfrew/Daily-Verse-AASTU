@@ -6,7 +6,7 @@ Daily Verse is a Telegram Bible reading companion for the AASTU ECSF community. 
 
 - Python 3.11 or newer
 - Windows PowerShell
-- A Telegram bot token from BotFather (needed when Telegram handlers are added)
+- A Telegram bot token from BotFather
 
 ## Set up on Windows
 
@@ -20,7 +20,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and set `BOT_TOKEN` when you have created the bot. Keep `.env` private; it is ignored by Git. The initial foundation does not start Telegram polling yet.
+Edit `.env` and set `BOT_TOKEN`. Keep `.env` private; it is ignored by Git.
 
 ## Initialize the local database
 
@@ -38,7 +38,7 @@ Set `BOT_TOKEN` in `.env`, then run:
 python -m app.main
 ```
 
-The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. EAT is represented as a fixed UTC+3 offset, so Windows does not need a separate timezone database. Daily reminders are not scheduled yet, and chapter reading clearly reports that verified Bible text is not connected.
+The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. Daily reminders are not scheduled yet.
 
 ## Run checks
 
@@ -48,13 +48,15 @@ python -m unittest discover -s tests -v
 
 ## Current status
 
-- Python configuration reads `BOT_TOKEN` and `DATABASE_PATH` from environment variables and `.env`.
+- Python configuration reads `BOT_TOKEN`, `DATABASE_PATH`, and optional `MINI_APP_URL` from environment variables and `.env`.
 - SQLite schema initialization is repeatable.
 - The supplied 231-day reading plan loads from JSON and validates continuous day numbering and Gregorian dates.
-- A normalized Bible JSON access layer supports full chapters, individual verses, and merged verse-number ranges. Tests use explicitly synthetic fixture strings, never Bible quotations.
+- The Amharic Bible source adapter supports full chapters, individual verses, and merged verse-number ranges. Tests use explicitly synthetic fixture strings, never Bible quotations.
 - Assigned readings expand into ordered canonical book/chapter requests, and chapter messages repeat references while splitting long text without dropping or reordering verse content.
 - A shared reference parser maps English and Amharic names for all 66 Protestant books to canonical IDs and parses chapter and verse ranges.
-- Bible text, Telegram handlers, and reminder scheduling are not included yet.
+- Telegram chapter reading and bilingual inline reference search use the same Bible data access layer.
+- A static Telegram Mini App reader is built for GitHub Pages and loads only the selected chapter asset.
+- Daily reminders are not implemented yet.
 
 ## Bible data source review
 
@@ -62,12 +64,25 @@ The candidate [Amharic Bible JSON repository](https://github.com/magna25/amharic
 
 The local copy is in `data/bible/source/amharic_bible.json`; the repository adapter reads its source format directly and maps the 66 books to the bot's canonical IDs. Empty verse slots before text are rendered as combined verse ranges. The adapter flags chapters with trailing empty verse slots and the chapter reader refuses to present those chapters as complete. A malformed chapter label is treated as unavailable rather than guessed. The dataset does not contain English text.
 
-The locally inspected combined file has 66 books and 1,189 chapter rows, but one chapter label is malformed and 480 verse positions are empty. Against the supplied 231-day plan, 806 referenced chapters are complete, 22 have trailing empty verse slots, and none of the plan's chapter references are absent by number. These counts describe source structure, not a verse-by-verse accuracy audit. The README says the data is free to use and documents combined verse numbering; the repository's MIT license names the software author, while the Bible-text scrape is attributed to WordProject and GeezExperience. Confirm redistribution rights for the source content before a public release.
+The locally inspected combined file has 66 books and 1,189 chapter rows, six malformed chapter labels, and 480 empty verse positions. Against the supplied 231-day plan, 806 referenced chapters are complete, 22 have trailing empty verse slots, and none of the plan's chapter references are absent by number. The static site builder preserves malformed labels as unavailable and does not publish those chapter files. These counts describe source structure, not a verse-by-verse accuracy audit. The README says the data is free to use and documents combined verse numbering; the repository's MIT license names the software author, while the Bible-text scrape is attributed to WordProject and GeezExperience. Confirm redistribution rights for the source content before a public release.
 
 ## Inline Bible search
 
 Inline reference search accepts English and Amharic book names, for example `Genesis 1:1`, `Psalm 23:1`, `ዘፍጥረት 1`, and `መዝሙረ ዳዊት 23:1`. The current dataset provides Amharic text only, so results are labeled Amharic even when the query uses an English book name. Chapter searches return selectable verse results. The result button opens the requested complete chapter in a private chat when that chapter is complete in the source data.
 
-To enable inline mode, open BotFather, send `/setinline`, select the bot, and set a short placeholder such as `Search Bible references`. Then test in Telegram by typing `@YourBotUsername Genesis 1:1` or `@YourBotUsername ዘፍጥረት 1`. Replace `YourBotUsername` with the bot's actual username. Inline mode requires the bot to be running and the data file to be installed.
+Inline mode is enabled in BotFather with `/setinline`. Test in Telegram by typing `@AASTU_ECSF_DailyVerse_2026Bot Genesis 1:1` or `@AASTU_ECSF_DailyVerse_2026Bot ዘፍጥረት 1`. Inline mode requires the bot to be running and the data file to be installed.
 
-Next milestone: test inline search with the real Telegram bot, then implement daily reminders and locate a separately licensed English translation before returning English Bible text.
+## GitHub Pages Mini App
+
+The project repository is public, so GitHub Pages is available on GitHub Free. The published Mini App URL for this repository is `https://barkotfrew.github.io/Daily-Verse-AASTU/` once Pages is enabled. In GitHub, open **Settings → Pages** and choose **GitHub Actions** as the build and deployment source. The workflow `.github/workflows/deploy-miniapp.yml` builds and publishes the static reader from `main`.
+
+The builder splits Bible text into chapter-sized assets under the generated `webapp/dist` directory, so opening one chapter does not download the full dataset. To preview locally:
+
+```powershell
+python scripts/build_miniapp.py
+python -m http.server 8000 --directory webapp/dist
+```
+
+Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Pages succeeds, set `MINI_APP_URL=https://barkotfrew.github.io/Daily-Verse-AASTU` in the bot host's environment and restart the bot. Until then, inline chapter searches keep their private-chat fallback. The Bible text and Mini App are public; verify text redistribution rights before enabling public deployment.
+
+Next milestone: enable GitHub Pages and test the chapter button in Telegram, then implement daily reminders. English Bible text still requires a separately licensed source.

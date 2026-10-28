@@ -1,6 +1,7 @@
 """Telegram commands, menu buttons, and per-user callbacks."""
 
 from pathlib import Path
+from urllib.parse import urlencode
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
@@ -12,6 +13,7 @@ from aiogram.types import (
     InlineQueryResultArticle,
     InlineQueryResultsButton,
     InputTextMessageContent,
+    WebAppInfo,
 )
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 
@@ -103,6 +105,7 @@ def build_router(
     database_path: Path,
     plan: ReadingPlan,
     bible: JsonBibleRepository | None = None,
+    mini_app_url: str = "",
 ) -> Router:
     router = Router(name="daily-verse")
 
@@ -175,10 +178,23 @@ def build_router(
         ]
         button = None
         if response.chapter_start_parameter:
-            button = InlineQueryResultsButton(
-                text="Open full chapter in Daily Verse",
-                start_parameter=response.chapter_start_parameter,
-            )
+            if mini_app_url:
+                chapter_reference = parse_chapter_start_parameter(response.chapter_start_parameter)
+                if chapter_reference is not None:
+                    book_id, chapter_number = chapter_reference
+                    mini_app_link = (
+                        f"{mini_app_url}/?"
+                        f"{urlencode({'book': book_id, 'chapter': chapter_number})}"
+                    )
+                    button = InlineQueryResultsButton(
+                        text="Open full chapter in Daily Verse",
+                        web_app=WebAppInfo(url=mini_app_link),
+                    )
+            if button is None:
+                button = InlineQueryResultsButton(
+                    text="Open full chapter in Daily Verse",
+                    start_parameter=response.chapter_start_parameter,
+                )
         await inline_query.answer(
             results,
             cache_time=60,

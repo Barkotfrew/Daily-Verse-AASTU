@@ -56,6 +56,10 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIsNone(self.bible.get_verse("genesis", 1, 4))
         self.assertIsNone(self.bible.get_chapter("unknown", 1))
 
+    def test_list_chapters_returns_sorted_available_chapters(self) -> None:
+        self.assertEqual(self.bible.list_chapters("genesis"), (1, 2))
+        self.assertEqual(self.bible.list_chapters("unknown"), ())
+
     def test_long_chapter_message_splits_keep_every_verse_and_order(self) -> None:
         chapter = self.bible.get_chapter("genesis", 1)
 

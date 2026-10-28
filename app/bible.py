@@ -168,6 +168,13 @@ class JsonBibleRepository:
         """Return a complete chapter, or None when the requested data is absent."""
         return self._chapters.get((book_id, chapter_number))
 
+    def list_chapters(self, book_id: str) -> tuple[int, ...]:
+        """Return available chapter numbers for a canonical book identifier."""
+        return tuple(sorted(
+            number for current_book_id, number in self._chapters
+            if current_book_id == book_id
+        ))
+
     def get_verse(self, book_id: str, chapter_number: int, verse_number: int) -> Verse | None:
         """Return the actual verse row, including a combined-number row if applicable."""
         chapter = self.get_chapter(book_id, chapter_number)
