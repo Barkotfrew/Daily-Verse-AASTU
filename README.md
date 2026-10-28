@@ -64,4 +64,10 @@ The local copy is in `data/bible/source/amharic_bible.json`; the repository adap
 
 The locally inspected combined file has 66 books and 1,189 chapter rows, but one chapter label is malformed and 480 verse positions are empty. Against the supplied 231-day plan, 806 referenced chapters are complete, 22 have trailing empty verse slots, and none of the plan's chapter references are absent by number. These counts describe source structure, not a verse-by-verse accuracy audit. The README says the data is free to use and documents combined verse numbering; the repository's MIT license names the software author, while the Bible-text scrape is attributed to WordProject and GeezExperience. Confirm redistribution rights for the source content before a public release.
 
-Next milestone: implement bilingual inline queries against this same Amharic repository and find a separately licensed English translation before returning English Bible text.
+## Inline Bible search
+
+Inline reference search accepts English and Amharic book names, for example `Genesis 1:1`, `Psalm 23:1`, `ዘፍጥረት 1`, and `መዝሙረ ዳዊት 23:1`. The current dataset provides Amharic text only, so results are labeled Amharic even when the query uses an English book name. Chapter searches return selectable verse results. The result button opens the requested complete chapter in a private chat when that chapter is complete in the source data.
+
+To enable inline mode, open BotFather, send `/setinline`, select the bot, and set a short placeholder such as `Search Bible references`. Then test in Telegram by typing `@YourBotUsername Genesis 1:1` or `@YourBotUsername ዘፍጥረት 1`. Replace `YourBotUsername` with the bot's actual username. Inline mode requires the bot to be running and the data file to be installed.
+
+Next milestone: test inline search with the real Telegram bot, then implement daily reminders and locate a separately licensed English translation before returning English Bible text.

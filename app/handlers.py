@@ -4,7 +4,15 @@ from pathlib import Path
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InlineQueryResultsButton,
+    InputTextMessageContent,
+)
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 
 from app.database import (
@@ -15,6 +23,7 @@ from app.database import (
     set_reminders_enabled,
 )
 from app.bible import JsonBibleRepository, format_chapter_messages
+from app.inline_search import parse_chapter_start_parameter, search_inline
 from app.reading_plan import ReadingPlan
 from app.references import ReferenceParseError, parse_reading_assignment
 from app.readings import (
@@ -122,13 +131,59 @@ def build_router(
         )
 
     @router.message(Command("start"))
-    async def start(message: Message) -> None:
+    async def start(message: Message, command: CommandObject) -> None:
         if message.from_user is not None:
             register_user(database_path, message.from_user.id)
+        chapter_reference = parse_chapter_start_parameter(command.args)
+        if chapter_reference is not None:
+            book_id, chapter_number = chapter_reference
+            if bible is None:
+                await message.answer("Amharic Bible text is not available right now.")
+                return
+            chapter = bible.get_chapter(book_id, chapter_number)
+            if chapter is None:
+                await message.answer("That chapter is not available in the Bible data.")
+                return
+            if not chapter.complete:
+                await message.answer(
+                    f"The available source has missing ending text for "
+                    f"{chapter.book_name} {chapter.number}; it cannot be shown as a complete chapter."
+                )
+                return
+            for text in format_chapter_messages(chapter):
+                await message.answer(text)
+            return
         await message.answer(
             "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
             "Welcome to Daily Verse. Choose an option below.",
             reply_markup=MAIN_MENU,
+        )
+
+    @router.inline_query()
+    async def bible_inline_search(inline_query: InlineQuery) -> None:
+        response = search_inline(inline_query.query, bible)
+        results = [
+            InlineQueryResultArticle(
+                id=article.id,
+                title=article.title,
+                description=article.description,
+                input_message_content=InputTextMessageContent(
+                    message_text=article.message_text,
+                ),
+            )
+            for article in response.articles
+        ]
+        button = None
+        if response.chapter_start_parameter:
+            button = InlineQueryResultsButton(
+                text="Open full chapter in Daily Verse",
+                start_parameter=response.chapter_start_parameter,
+            )
+        await inline_query.answer(
+            results,
+            cache_time=60,
+            is_personal=True,
+            button=button,
         )
 
     @router.message(Command("today"))
