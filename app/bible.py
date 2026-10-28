@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
+from app.references import BOOKS
+
 
 class BibleDataError(ValueError):
     """Raised when Bible data cannot be loaded or is malformed."""
@@ -34,6 +36,7 @@ class Chapter:
     book_name: str
     number: int
     verses: tuple[Verse, ...]
+    complete: bool = True
 
 
 class JsonBibleRepository:
@@ -48,8 +51,64 @@ class JsonBibleRepository:
             raise BibleDataError("Bible data must contain a books list")
 
         self._chapters: dict[tuple[str, int], Chapter] = {}
-        for book in raw["books"]:
-            self._load_book(book)
+        if all(isinstance(book, dict) and {"id", "name"} <= book.keys() for book in raw["books"]):
+            for book in raw["books"]:
+                self._load_book(book)
+        elif all(isinstance(book, dict) and {"title", "chapters"} <= book.keys() for book in raw["books"]):
+            self._load_amharic_source(raw["books"])
+        else:
+            raise BibleDataError("Unrecognized Bible books schema")
+
+    def _load_amharic_source(self, books: list[object]) -> None:
+        """Load magna25's source layout, whose book order follows the Protestant canon.
+
+        Empty verse slots preceding text encode one combined verse range. Trailing
+        empty slots have no recoverable text, so the chapter is flagged incomplete.
+        """
+        if len(books) != len(BOOKS):
+            raise BibleDataError(
+                f"Expected {len(BOOKS)} books in the Amharic source; found {len(books)}"
+            )
+        for book, canonical in zip(books, BOOKS, strict=True):
+            if not isinstance(book, dict) or not isinstance(book.get("chapters"), list):
+                raise BibleDataError("Invalid book in Amharic source data")
+            for raw_chapter in book["chapters"]:
+                if not isinstance(raw_chapter, dict):
+                    raise BibleDataError(f"Invalid chapter in {canonical.id}")
+                number = raw_chapter.get("chapter")
+                rows = raw_chapter.get("verses")
+                if isinstance(number, str) and number.isdecimal():
+                    number = int(number)
+                if not isinstance(rows, list) or not rows:
+                    raise BibleDataError(f"Invalid chapter data in {canonical.id}")
+                # Preserve a malformed source label as unavailable instead of
+                # guessing which chapter its text belongs to.
+                if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+                    continue
+
+                verses: list[Verse] = []
+                pending_start: int | None = None
+                for index, text in enumerate(rows, start=1):
+                    if not isinstance(text, str):
+                        raise BibleDataError(f"Invalid verse in {canonical.id} chapter {number}")
+                    if not text.strip():
+                        if pending_start is None:
+                            pending_start = index
+                        continue
+                    start = pending_start if pending_start is not None else index
+                    verses.append(Verse(start, index, text))
+                    pending_start = None
+                chapter = Chapter(
+                    canonical.id,
+                    canonical.amharic,
+                    number,
+                    tuple(verses),
+                    complete=pending_start is None,
+                )
+                key = (canonical.id, number)
+                if key in self._chapters:
+                    raise BibleDataError(f"Duplicate chapter {canonical.id} {number}")
+                self._chapters[key] = chapter
 
     def _load_book(self, book: object) -> None:
         if not isinstance(book, dict):

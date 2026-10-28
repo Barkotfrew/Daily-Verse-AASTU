@@ -1,6 +1,8 @@
 """Tests for normalized Bible data access, using synthetic fixture text only."""
 
 from pathlib import Path
+import json
+import tempfile
 import unittest
 
 from app.bible import Chapter, JsonBibleRepository, Verse, format_chapter_messages
@@ -11,6 +13,29 @@ FIXTURE = Path(__file__).parent / "fixtures" / "bible_fixture.json"
 class BibleRepositoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.bible = JsonBibleRepository(FIXTURE)
+
+    def test_amharic_source_schema_maps_combined_and_missing_verse_slots(self) -> None:
+        from app.references import BOOKS
+
+        source_books = [
+            {
+                "title": book.amharic,
+                "chapters": [{"chapter": 1, "verses": ["first", "", "combined"]}],
+            }
+            for book in BOOKS
+        ]
+        # A trailing empty slot means that the available chapter text is incomplete.
+        source_books[0]["chapters"][0]["verses"].append("")
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory) / "source.json"
+            source_path.write_text(json.dumps({"books": source_books}), encoding="utf-8")
+            source = JsonBibleRepository(source_path)
+
+        chapter = source.get_chapter("GEN", 1)
+        self.assertEqual([verse.label for verse in chapter.verses], ["1", "2-3"])
+        self.assertEqual(source.get_verse("GEN", 1, 2).text, "combined")
+        self.assertFalse(chapter.complete)
+        self.assertEqual(source.get_chapter("JOB", 1).book_id, "JOB")
 
     def test_returns_complete_chapter_in_verse_order(self) -> None:
         chapter = self.bible.get_chapter("genesis", 1)

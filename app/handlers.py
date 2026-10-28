@@ -239,6 +239,13 @@ def build_router(
                     "No text was substituted."
                 )
                 continue
+            if not chapter.complete:
+                await callback.message.answer(
+                    f"Could not retrieve the complete text for {passage.book.english} "
+                    f"{passage.chapter}. The source data has an empty ending verse slot, "
+                    "so this chapter was not displayed as complete."
+                )
+                continue
             for text in format_chapter_messages(chapter):
                 await callback.message.answer(text)
 
