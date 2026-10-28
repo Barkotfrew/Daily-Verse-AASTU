@@ -102,6 +102,12 @@ class ReferenceParseError(ValueError):
     """Raised when a query is not an unambiguous Bible reference."""
 
 
+@dataclass(frozen=True)
+class ChapterPassage:
+    book: Book
+    chapter: int
+
+
 def _normalize_name(value: str) -> str:
     value = unicodedata.normalize("NFC", value).casefold()
     value = value.replace("–", "-").replace("—", "-")
@@ -169,3 +175,37 @@ def parse_reference(query: str) -> BibleReference:
         if normalized.startswith(alias + " "):
             raise ReferenceParseError("Use a reference like 'John 3' or 'John 3:16'")
     raise ReferenceParseError("Unknown Bible book; check the book name")
+
+
+_CHAPTER_LIST_RE = re.compile(r"\d+(?:\s*-\s*\d+)?(?:\s*/\s*\d+(?:\s*-\s*\d+)?)*")
+
+
+def parse_reading_assignment(reading: str) -> tuple[ChapterPassage, ...]:
+    """Expand a plan reading like ``1 ሳሙኤል 18-20 & መዝሙረ ዳዊት 11/59``."""
+    passages: list[ChapterPassage] = []
+    segments = [segment.strip() for segment in reading.split("&")]
+    if not segments or any(not segment for segment in segments):
+        raise ReferenceParseError("Reading contains an empty passage")
+
+    for segment in segments:
+        words = segment.split()
+        parsed = False
+        for split_at in range(len(words) - 1, 0, -1):
+            book = find_book(" ".join(words[:split_at]))
+            if book is None:
+                continue
+            chapter_list = " ".join(words[split_at:])
+            if not _CHAPTER_LIST_RE.fullmatch(chapter_list):
+                continue
+            for item in chapter_list.split("/"):
+                bounds = [int(value.strip()) for value in item.split("-")]
+                start = bounds[0]
+                end = bounds[-1]
+                if start < 1 or end < start:
+                    raise ReferenceParseError("Chapter range must use positive, increasing numbers")
+                passages.extend(ChapterPassage(book, chapter) for chapter in range(start, end + 1))
+            parsed = True
+            break
+        if not parsed:
+            raise ReferenceParseError(f"Could not parse scheduled reading: {segment}")
+    return tuple(passages)

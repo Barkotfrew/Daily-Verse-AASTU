@@ -13,6 +13,10 @@ class BibleDataError(ValueError):
     """Raised when Bible data cannot be loaded or is malformed."""
 
 
+class MessageLimitError(ValueError):
+    """Raised when the message limit cannot fit a reference header and verse label."""
+
+
 @dataclass(frozen=True)
 class Verse:
     start: int
@@ -114,3 +118,64 @@ class JsonBibleRepository:
             (verse for verse in chapter.verses if verse.start <= verse_number <= verse.end),
             None,
         )
+
+
+def _split_text(text: str, limit: int) -> tuple[str, str]:
+    """Split text without dropping characters, preferring a whitespace boundary."""
+    if limit < 1:
+        raise MessageLimitError("Message limit is too small for the verse label")
+    if len(text) <= limit:
+        return text, ""
+    split_at = text.rfind(" ", 0, limit + 1)
+    if split_at <= 0:
+        split_at = limit
+    else:
+        split_at += 1
+    return text[:split_at], text[split_at:]
+
+
+def format_chapter_messages(chapter: Chapter, max_chars: int = 4000) -> tuple[str, ...]:
+    """Render all verses in order, splitting only when needed and repeating references."""
+    header = f"{chapter.book_name} {chapter.number}"
+    if max_chars <= len(header) + 4:
+        raise MessageLimitError("Message limit is too small for the chapter reference")
+
+    messages: list[str] = []
+    current_lines = [header]
+    current_length = len(header)
+
+    def flush() -> None:
+        nonlocal current_lines, current_length
+        if len(current_lines) > 1:
+            messages.append("\n".join(current_lines))
+        current_lines = [header]
+        current_length = len(header)
+
+    for verse in chapter.verses:
+        remaining = verse.text
+        continuation = False
+        while remaining:
+            label = f"{verse.label}{' (continued)' if continuation else ''}. "
+            # Keep a whole verse together when it fits in a fresh message.
+            fresh_capacity = max_chars - len(header) - 1 - len(label)
+            if len(remaining) <= fresh_capacity:
+                line = label + remaining
+                if current_length + 1 + len(line) > max_chars:
+                    flush()
+                current_lines.append(line)
+                current_length += 1 + len(line)
+                break
+
+            if len(current_lines) > 1:
+                flush()
+                continue
+
+            piece, remaining = _split_text(remaining, fresh_capacity)
+            line = label + piece
+            current_lines.append(line)
+            current_length += 1 + len(line)
+            flush()
+            continuation = True
+
+    flush()
+    return tuple(messages)

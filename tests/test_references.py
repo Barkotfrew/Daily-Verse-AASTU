@@ -2,7 +2,14 @@
 
 import unittest
 
-from app.references import BOOKS, ReferenceParseError, find_book, parse_reference
+from app.reading_plan import load_reading_plan
+from app.references import (
+    BOOKS,
+    ReferenceParseError,
+    find_book,
+    parse_reading_assignment,
+    parse_reference,
+)
 
 
 class BibleReferenceTests(unittest.TestCase):
@@ -35,6 +42,23 @@ class BibleReferenceTests(unittest.TestCase):
             with self.subTest(query=query):
                 with self.assertRaises(ReferenceParseError):
                     parse_reference(query)
+
+    def test_expands_plan_chapter_ranges_lists_and_multiple_books(self) -> None:
+        passages = parse_reading_assignment(
+            "1 ሳሙኤል 18-20 & መዝሙረ ዳዊት 11/59"
+        )
+
+        self.assertEqual(
+            [(item.book.id, item.chapter) for item in passages],
+            [("1SA", 18), ("1SA", 19), ("1SA", 20), ("PSA", 11), ("PSA", 59)],
+        )
+
+    def test_every_authoritative_plan_reading_parses(self) -> None:
+        plan = load_reading_plan()
+
+        for entry in plan.entries:
+            with self.subTest(day=entry.day, reading=entry.reading):
+                self.assertTrue(parse_reading_assignment(entry.reading))
 
 
 if __name__ == "__main__":

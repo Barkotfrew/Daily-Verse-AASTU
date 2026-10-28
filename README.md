@@ -52,6 +52,7 @@ python -m unittest discover -s tests -v
 - SQLite schema initialization is repeatable.
 - The supplied 231-day reading plan loads from JSON and validates continuous day numbering and Gregorian dates.
 - A normalized Bible JSON access layer supports full chapters, individual verses, and merged verse-number ranges. Tests use explicitly synthetic fixture strings, never Bible quotations.
+- Assigned readings expand into ordered canonical book/chapter requests, and chapter messages repeat references while splitting long text without dropping or reordering verse content.
 - A shared reference parser maps English and Amharic names for all 66 Protestant books to canonical IDs and parses chapter and verse ranges.
 - Bible text, Telegram handlers, and reminder scheduling are not included yet.
 
@@ -59,6 +60,6 @@ python -m unittest discover -s tests -v
 
 The candidate [Amharic Bible JSON repository](https://github.com/magna25/amharic-bible-json) lists 66 individual Protestant Bible books and provides a 5.44 MB combined JSON file. Its README says the data came from WordProject and GeezExperience, that it has not been checked for consistency, and that some Amharic verse numbers are combined into ranges with the text stored on the final verse number. The repository has an MIT license and its README says the data is free to use. WordProject's own terms only grant distribution for Bible content that is in the public domain; the provenance of the GeezExperience material and the rights for the translation need confirmation before bundling or redistributing this scrape. No English translation is included in this candidate.
 
-The normalized reader is tested with synthetic fixture text while this remains unresolved. It can represent combined verse-number ranges and missing data without inventing text. No real Bible text has been added to this project.
+The bot looks for normalized Amharic data at `data/bible/normalized_bible.json`. The reader is tested with synthetic fixture text while this source remains unresolved. It can represent combined verse-number ranges and missing data without inventing text. No real Bible text has been added to this project.
 
 Next milestone: verify the source rights and inspect a local copy of the dataset for actual JSON schema, all chapter coverage, empty verses, and book-name mapping before adapting it to the normalized reader.

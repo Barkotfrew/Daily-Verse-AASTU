@@ -3,7 +3,7 @@
 from pathlib import Path
 import unittest
 
-from app.bible import JsonBibleRepository
+from app.bible import Chapter, JsonBibleRepository, Verse, format_chapter_messages
 
 FIXTURE = Path(__file__).parent / "fixtures" / "bible_fixture.json"
 
@@ -30,6 +30,30 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIsNone(self.bible.get_chapter("genesis", 3))
         self.assertIsNone(self.bible.get_verse("genesis", 1, 4))
         self.assertIsNone(self.bible.get_chapter("unknown", 1))
+
+    def test_long_chapter_message_splits_keep_every_verse_and_order(self) -> None:
+        chapter = self.bible.get_chapter("genesis", 1)
+
+        messages = format_chapter_messages(chapter, max_chars=120)
+
+        self.assertTrue(all(len(message) <= 120 for message in messages))
+        joined = "\n".join(messages)
+        self.assertLess(joined.index("1. FIXTURE TEXT 1"), joined.index("2-3. FIXTURE TEXT 2-3"))
+
+    def test_oversized_verse_splits_without_losing_or_reordering_text(self) -> None:
+        verse_text = "alpha beta gamma delta epsilon zeta eta theta"
+        chapter = Chapter("GEN", "Genesis (fixture)", 9, (Verse(1, 1, verse_text),))
+
+        messages = format_chapter_messages(chapter, max_chars=48)
+        fragments = [
+            line.split(". ", 1)[1]
+            for message in messages
+            for line in message.splitlines()[1:]
+        ]
+
+        self.assertGreater(len(messages), 1)
+        self.assertTrue(all(len(message) <= 48 for message in messages))
+        self.assertEqual("".join(fragments), verse_text)
 
 
 if __name__ == "__main__":

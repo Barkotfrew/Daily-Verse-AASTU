@@ -14,7 +14,9 @@ from app.database import (
     register_user,
     set_reminders_enabled,
 )
+from app.bible import JsonBibleRepository, format_chapter_messages
 from app.reading_plan import ReadingPlan
+from app.references import ReferenceParseError, parse_reading_assignment
 from app.readings import (
     PLAN_PAGE_SIZE,
     eat_date,
@@ -88,7 +90,11 @@ def _overview_keyboard(page: int, total_pages: int, plan: ReadingPlan) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_router(database_path: Path, plan: ReadingPlan) -> Router:
+def build_router(
+    database_path: Path,
+    plan: ReadingPlan,
+    bible: JsonBibleRepository | None = None,
+) -> Router:
     router = Router(name="daily-verse")
 
     async def send_today(message: Message) -> None:
@@ -208,9 +214,33 @@ def build_router(database_path: Path, plan: ReadingPlan) -> Router:
         if entry is None:
             await callback.answer("That day is outside the reading plan.", show_alert=True)
             return
-        await callback.answer(
-            f"Bible text for {entry.reading} is not connected yet.", show_alert=True
-        )
+        if bible is None:
+            await callback.answer(
+                "Verified Bible text is not installed yet.", show_alert=True
+            )
+            return
+        try:
+            passages = parse_reading_assignment(entry.reading)
+        except ReferenceParseError:
+            await callback.answer(
+                "This reading reference could not be parsed. Please contact an administrator.",
+                show_alert=True,
+            )
+            return
+        if callback.message is None:
+            await callback.answer("Open the bot chat to read chapters.", show_alert=True)
+            return
+        await callback.answer("Sending assigned chapters…")
+        for passage in passages:
+            chapter = bible.get_chapter(passage.book.id, passage.chapter)
+            if chapter is None:
+                await callback.message.answer(
+                    f"Could not retrieve {passage.book.english} {passage.chapter}. "
+                    "No text was substituted."
+                )
+                continue
+            for text in format_chapter_messages(chapter):
+                await callback.message.answer(text)
 
     @router.message(Command("progress"))
     @router.message(F.text == "My Progress")
