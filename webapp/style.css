@@ -340,3 +340,58 @@ footer span { color: #9eaa97; }
   .chapter-text { font-size: 1.12rem; line-height: 1.85; }
 }
 
+/* Dark, quiet reading palette. App controls stay sans-serif; Scripture stays serif. */
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --forest: #c9c1ac;
+  --forest-light: #ddd4be;
+  --gold: #a99d7e;
+  --paper: #141514;
+  --parchment: #1c1d1b;
+  --ink: #e8e5dc;
+  --muted: #a4a29b;
+  --rule: #373833;
+  --alert: #d39b91;
+}
+body {
+  color: var(--ink);
+  background: #141514;
+}
+.topbar { border-color: var(--rule); }
+.brand-mark {
+  border-color: #4a4942;
+  background: transparent;
+  color: #c9c1ac;
+}
+.eyebrow, h1, h2, label, select, button, .status,
+.reading-label, .chapter-kicker, .chapter-title, footer {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.eyebrow { color: var(--muted); font-weight: 500; letter-spacing: .04em; }
+h1, h2 { color: var(--ink); font-weight: 500; }
+.header-ornament { display: none; }
+select, button { border-color: #41423e; color: var(--ink); }
+select { background: #20211f; }
+select:focus-visible, button:focus-visible { outline-color: #989078; }
+.primary-button { border-color: #b8ad91; background: #b8ad91; color: #171816; }
+.primary-button:hover:not(:disabled) { background: #c9bea1; }
+.secondary-button { color: #d4cbb5; }
+.secondary-button:hover:not(:disabled) { background: #252622; }
+.status { color: var(--muted); }
+.reading-label { border-color: var(--rule); color: #c3bdaF; }
+.reading-warning { border-color: #694943; background: #2b201e; color: #e2aaa0; }
+.chapter-section + .chapter-section { border-color: var(--rule); }
+.chapter-kicker { color: #a5a092; font-weight: 500; letter-spacing: .1em; }
+.chapter-title { color: #e8e5dc; font-weight: 500; }
+.chapter-ornament { color: #99927c; }
+.chapter-text {
+  color: #e2dfd6;
+  font-family: Georgia, "Nyala", "Noto Serif Ethiopic", "Abyssinica SIL", serif;
+}
+.verse-number { color: #aaa28c; }
+.first-verse .verse-number { color: #e2dfd6; }
+.verse-text { color: #e2dfd6; }
+footer { color: #908e86; }
+footer span { color: #aaa28c; }
+
