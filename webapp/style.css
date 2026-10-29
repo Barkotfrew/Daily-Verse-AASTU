@@ -227,7 +227,7 @@ button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
 .chapter-text {
   margin: 0;
   color: var(--ink);
-  font: 400 1.18rem/1.95 "Benaiah", "Noto Serif Ethiopic", Georgia, serif;
+  font: 400 1.18rem/1.95 "Noto Serif Ethiopic", Georgia, serif;
   overflow-wrap: anywhere;
   text-align: start;
 }
