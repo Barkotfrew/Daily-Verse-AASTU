@@ -51,13 +51,13 @@
     nextButton.disabled = !book || index < 0 || index >= book.chapters.length - 1;
   }
 
-  function makeVerse(row) {
-    const verse = document.createElement("div");
-    verse.className = "verse";
-    const number = document.createElement("span");
+  function makeVerse(row, isFirst) {
+    const verse = document.createElement("span");
+    verse.className = isFirst ? "verse first-verse" : "verse";
+    const number = document.createElement("sup");
     number.className = "verse-number";
     number.textContent = row.start === row.end ? String(row.start) : `${row.start}–${row.end}`;
-    const text = document.createElement("p");
+    const text = document.createElement("span");
     text.className = "verse-text";
     text.textContent = row.text;
     verse.append(number, text);
@@ -65,10 +65,26 @@
   }
 
   function appendChapter(passage, chapter) {
+    const section = document.createElement("section");
+    section.className = "chapter-section";
+    const kicker = document.createElement("p");
+    kicker.className = "chapter-kicker";
+    kicker.textContent = `${passage.english} · CHAPTER ${passage.chapter}`;
     const heading = document.createElement("h3");
     heading.className = "chapter-title";
-    heading.textContent = `${passage.english} ${passage.chapter} · ${passage.amharic} ${passage.chapter}`;
-    content.append(heading, ...chapter.verses.map(makeVerse));
+    heading.textContent = `${passage.amharic} ${passage.chapter}`;
+    const ornament = document.createElement("span");
+    ornament.className = "chapter-ornament";
+    ornament.setAttribute("aria-hidden", "true");
+    ornament.textContent = "✦";
+    const text = document.createElement("p");
+    text.className = "chapter-text";
+    chapter.verses.forEach((row, index) => {
+      if (index) text.append(document.createTextNode(" "));
+      text.append(makeVerse(row, index === 0));
+    });
+    section.append(kicker, heading, ornament, text);
+    content.append(section);
   }
 
   async function loadChapterAsset(passage) {

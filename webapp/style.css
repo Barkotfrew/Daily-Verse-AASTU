@@ -164,46 +164,62 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
   font-size: .94rem;
   line-height: 1.55;
 }
-.chapter-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 24px 0 11px;
-  color: var(--forest);
-  font-size: 1.34rem;
-  font-weight: 600;
-  line-height: 1.4;
+.chapter-section + .chapter-section {
+  margin-top: 32px;
+  padding-top: 25px;
+  border-top: 1px solid #695a3c88;
 }
-.chapter-title::after { height: 1px; flex: 1; background: var(--rule); content: ""; }
-.verse {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  gap: 11px;
-  padding: 14px 3px;
-  border-top: 1px solid #39463d99;
-}
-.verse-number {
-  display: grid;
-  width: 29px;
-  min-height: 29px;
-  place-items: center;
-  align-self: start;
-  border: 1px solid #8c7545;
-  border-radius: 50%;
-  background: #302b20;
-  color: #e0c47d;
-  font-family: Georgia, serif;
-  font-size: .75rem;
+.chapter-kicker {
+  margin: 0 0 7px;
+  color: var(--gold);
+  font-family: Georgia, "Segoe UI", sans-serif;
+  font-size: .66rem;
   font-weight: 700;
+  letter-spacing: .16em;
+  text-align: center;
+  text-transform: uppercase;
 }
-.verse-text {
+.chapter-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.55rem;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+}
+.chapter-ornament {
+  display: block;
+  margin: 3px auto 19px;
+  color: var(--gold);
+  font-size: .85rem;
+  text-align: center;
+}
+.chapter-text {
   margin: 0;
   color: #f0eadb;
   font-family: "Nyala", "Noto Serif Ethiopic", "Abyssinica SIL", Georgia, serif;
-  font-size: 1.18rem;
-  line-height: 1.95;
+  font-size: 1.2rem;
+  line-height: 2.05;
   overflow-wrap: anywhere;
+  text-align: start;
 }
+.verse { white-space: normal; }
+.verse-number {
+  margin-inline-end: .12em;
+  color: var(--gold);
+  font-family: Georgia, serif;
+  font-size: .67em;
+  font-weight: 700;
+  vertical-align: super;
+}
+.first-verse .verse-number {
+  margin-inline-end: .1em;
+  font-size: 1.9em;
+  font-weight: 400;
+  line-height: .75;
+  vertical-align: baseline;
+}
+.verse-text { color: #f0eadb; }
 
 footer {
   padding: 18px 4px 0;
@@ -219,7 +235,5 @@ footer span { padding: 0 5px; color: var(--gold); }
   .reader-card { padding: 24px 15px 19px; }
   .chapter-nav { grid-template-columns: 1fr 1fr; }
   .primary-button { grid-column: 1 / -1; grid-row: 1; }
-  .verse { grid-template-columns: 30px 1fr; gap: 8px; padding: 12px 1px; }
-  .verse-number { width: 27px; min-height: 27px; }
-  .verse-text { font-size: 1.11rem; }
+  .chapter-text { font-size: 1.13rem; line-height: 2; }
 }
