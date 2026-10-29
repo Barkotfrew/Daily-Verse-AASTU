@@ -45,6 +45,10 @@ class MiniAppBuildTests(unittest.TestCase):
             )
             self.assertEqual(len(readings["entries"]), 231)
             self.assertTrue((output / "index.html").is_file())
+            self.assertEqual(
+                (output / "fonts" / "Benaiah.ttf").read_bytes(),
+                (Path(__file__).resolve().parents[1] / "webapp" / "fonts" / "Benaiah.ttf").read_bytes(),
+            )
 
 
 if __name__ == "__main__":
