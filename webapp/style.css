@@ -1,15 +1,15 @@
 :root {
-  color-scheme: light;
-  --forest: #173b2e;
-  --forest-light: #285342;
-  --gold: #ad8747;
-  --gold-soft: #e8dcc1;
-  --paper: #eee6d5;
-  --parchment: #fbf7ed;
-  --ink: #282c24;
-  --muted: #777263;
-  --rule: #ded2b8;
-  --alert: #8d493c;
+  color-scheme: dark;
+  --forest: #d4b56f;
+  --forest-light: #e2c783;
+  --gold: #d1ad63;
+  --gold-soft: #463d2c;
+  --paper: #101a16;
+  --parchment: #19251f;
+  --ink: #f0eadb;
+  --muted: #b8b09f;
+  --rule: #39463d;
+  --alert: #e5a095;
   font-family: Georgia, "Noto Serif Ethiopic", Nyala, "Abyssinica SIL", serif;
 }
 
@@ -21,8 +21,8 @@ body {
   color: var(--ink);
   background-color: var(--paper);
   background-image:
-    radial-gradient(ellipse at 12% 7%, #fff9e9 0, transparent 38%),
-    radial-gradient(ellipse at 92% 82%, #d8c8a7 0, transparent 34%);
+    radial-gradient(ellipse at 12% 7%, #20362a 0, transparent 40%),
+    radial-gradient(ellipse at 92% 82%, #28271d 0, transparent 36%);
 }
 
 .shell {
@@ -37,7 +37,7 @@ body {
   gap: 13px;
   margin: 4px 3px 20px;
   padding: 0 3px 15px;
-  border-bottom: 1px solid #ad874766;
+  border-bottom: 1px solid #d1ad634d;
 }
 
 .brand-mark {
@@ -48,9 +48,9 @@ body {
   place-items: center;
   border: 1px solid #c8a965;
   border-radius: 50%;
-  outline: 1px solid #c8a96566;
+  outline: 1px solid #d1ad6355;
   outline-offset: 3px;
-  background: var(--forest);
+  background: #0c1511;
   color: #e4c782;
   font-family: Georgia, serif;
   font-size: 1.9rem;
@@ -73,10 +73,10 @@ h1 { margin: 0; color: var(--forest); font-size: 1.38rem; font-weight: 600; lett
   position: relative;
   overflow: hidden;
   padding: 25px 21px 23px;
-  border: 1px solid #c7b58e;
+  border: 1px solid #695a3c;
   border-radius: 18px;
   background: var(--parchment);
-  box-shadow: 0 14px 38px #51432c18, inset 0 0 0 4px #f5eedf, inset 0 0 0 5px #dfd1b3;
+  box-shadow: 0 14px 38px #0008, inset 0 0 0 4px #1e2d24, inset 0 0 0 5px #3b3527;
 }
 
 .reader-card::before,
@@ -92,7 +92,7 @@ h1 { margin: 0; color: var(--forest); font-size: 1.38rem; font-weight: 600; lett
 .reader-card::after { right: 10px; bottom: 10px; border-right: 1px solid; border-bottom: 1px solid; }
 
 .section-kicker { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 18px 9px; }
-.section-kicker span { width: 28px; height: 1px; background: #c4a568; }
+.section-kicker span { width: 28px; height: 1px; background: #b99958; }
 .section-kicker .eyebrow { margin: 0; white-space: nowrap; }
 h2 {
   margin: 0 0 19px;
@@ -113,12 +113,12 @@ label {
 }
 select, button {
   min-height: 46px;
-  border: 1px solid #cbbb9b;
+  border: 1px solid #536052;
   border-radius: 10px;
   color: var(--ink);
   font: inherit;
 }
-select { width: 100%; padding: 0 12px; background: #f5efdf; }
+select { width: 100%; padding: 0 12px; background: #202e26; }
 select:focus-visible, button:focus-visible { outline: 3px solid #ad874766; outline-offset: 2px; }
 
 .chapter-nav { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 8px; margin-top: 15px; }
@@ -128,12 +128,12 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
 .primary-button {
   border-color: var(--forest);
   background: var(--forest);
-  color: #fff8e9;
+  color: #172019;
   font-weight: 700;
 }
 .primary-button:hover:not(:disabled) { background: var(--forest-light); }
 .secondary-button { background: transparent; color: var(--forest); font-size: .86rem; }
-.secondary-button:hover:not(:disabled) { background: #eee5d2; }
+.secondary-button:hover:not(:disabled) { background: #26352b; }
 
 .status {
   min-height: 1.3em;
@@ -150,16 +150,16 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
   padding: 12px 14px;
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
-  color: #605747;
+  color: #d0c5ad;
   font-size: .98rem;
   line-height: 1.65;
   text-align: center;
 }
 .reading-warning {
   padding: 12px 14px;
-  border: 1px solid #c48d7e;
+  border: 1px solid #80594f;
   border-radius: 9px;
-  background: #f4e7df;
+  background: #392721;
   color: var(--alert);
   font-size: .94rem;
   line-height: 1.55;
@@ -180,7 +180,7 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
   grid-template-columns: 34px 1fr;
   gap: 11px;
   padding: 14px 3px;
-  border-top: 1px solid #ded2b899;
+  border-top: 1px solid #39463d99;
 }
 .verse-number {
   display: grid;
@@ -188,17 +188,17 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
   min-height: 29px;
   place-items: center;
   align-self: start;
-  border: 1px solid #c7ac71;
+  border: 1px solid #8c7545;
   border-radius: 50%;
-  background: #f1e7d0;
-  color: var(--forest);
+  background: #302b20;
+  color: #e0c47d;
   font-family: Georgia, serif;
   font-size: .75rem;
   font-weight: 700;
 }
 .verse-text {
   margin: 0;
-  color: #292d25;
+  color: #f0eadb;
   font-family: "Nyala", "Noto Serif Ethiopic", "Abyssinica SIL", Georgia, serif;
   font-size: 1.18rem;
   line-height: 1.95;
@@ -207,7 +207,7 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
 
 footer {
   padding: 18px 4px 0;
-  color: #82765f;
+  color: #a69b82;
   font-family: Georgia, "Segoe UI", sans-serif;
   font-size: .72rem;
   letter-spacing: .06em;
