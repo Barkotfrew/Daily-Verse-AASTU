@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="am">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#f7f5ef">
+    <meta name="theme-color" content="#173b2e">
     <title>Daily Verse · Bible Reader</title>
     <link rel="stylesheet" href="./style.css">
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
@@ -12,15 +12,20 @@
   <body>
     <main class="shell">
       <header class="topbar">
-        <div class="brand-mark" aria-hidden="true">DV</div>
-        <div>
-          <p class="eyebrow">AASTU ECSF</p>
+        <div class="brand-mark" aria-hidden="true">†</div>
+        <div class="brand-copy">
+          <p class="eyebrow">AASTU · ECSF</p>
           <h1>Daily Verse</h1>
         </div>
+        <span class="header-ornament" aria-hidden="true">✦</span>
       </header>
 
       <section class="reader-card" aria-labelledby="reader-title">
-        <p class="eyebrow">AMHARIC BIBLE</p>
+        <div class="section-kicker">
+          <span aria-hidden="true"></span>
+          <p class="eyebrow">ቅዱስ መጽሐፍ · AMHARIC SCRIPTURE</p>
+          <span aria-hidden="true"></span>
+        </div>
         <h2 id="reader-title">Read a chapter</h2>
         <div id="selectors" class="selectors">
           <label for="book-select">Book</label>
@@ -37,7 +42,7 @@
         <article id="chapter-content" class="chapter-content" aria-live="polite"></article>
       </section>
 
-      <footer>Daily Verse · Amharic text</footer>
+      <footer><span aria-hidden="true">†</span> Daily Verse · Amharic Bible <span aria-hidden="true">†</span></footer>
     </main>
   </body>
 </html>
