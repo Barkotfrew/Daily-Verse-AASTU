@@ -44,6 +44,16 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertEqual([verse.label for verse in chapter.verses], ["1", "2-3"])
         self.assertIn("not scripture", chapter.verses[0].text)
 
+    def test_supplied_genesis_14_text_completes_verses_23_and_24(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter = source.get_chapter("GEN", 14)
+
+        self.assertTrue(chapter.complete)
+        self.assertEqual(len(chapter.verses), 24)
+        self.assertIn("አንተ። አብራምን", chapter.verses[22].text)
+        self.assertIn("ይውሰዱ።", chapter.verses[23].text)
+
     def test_combined_verse_number_resolves_to_range_without_fabricating_text(self) -> None:
         verse_two = self.bible.get_verse("genesis", 1, 2)
         verse_three = self.bible.get_verse("genesis", 1, 3)
