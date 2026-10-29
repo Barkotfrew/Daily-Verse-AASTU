@@ -2,8 +2,8 @@
   const telegram = window.Telegram?.WebApp;
   telegram?.ready();
   telegram?.expand();
-  telegram?.setHeaderColor?.("#101a16");
-  telegram?.setBackgroundColor?.("#101a16");
+  telegram?.setHeaderColor?.("#11100e");
+  telegram?.setBackgroundColor?.("#11100e");
 
   const bookSelect = document.querySelector("#book-select");
   const chapterSelect = document.querySelector("#chapter-select");

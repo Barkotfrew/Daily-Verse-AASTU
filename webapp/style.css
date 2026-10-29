@@ -4,8 +4,8 @@
   --forest-light: #e2c783;
   --gold: #d1ad63;
   --gold-soft: #463d2c;
-  --paper: #101a16;
-  --parchment: #19251f;
+  --paper: #11100e;
+  --parchment: #1b1915;
   --ink: #f0eadb;
   --muted: #b8b09f;
   --rule: #39463d;
@@ -21,8 +21,8 @@ body {
   color: var(--ink);
   background-color: var(--paper);
   background-image:
-    radial-gradient(ellipse at 12% 7%, #20362a 0, transparent 40%),
-    radial-gradient(ellipse at 92% 82%, #28271d 0, transparent 36%);
+    radial-gradient(ellipse at 12% 7%, #28241b 0, transparent 40%),
+    radial-gradient(ellipse at 92% 82%, #211d17 0, transparent 36%);
 }
 
 .shell {
@@ -50,7 +50,7 @@ body {
   border-radius: 50%;
   outline: 1px solid #d1ad6355;
   outline-offset: 3px;
-  background: #0c1511;
+  background: #0b0a09;
   color: #e4c782;
   font-family: Georgia, serif;
   font-size: 1.9rem;
@@ -76,7 +76,7 @@ h1 { margin: 0; color: var(--forest); font-size: 1.38rem; font-weight: 600; lett
   border: 1px solid #695a3c;
   border-radius: 18px;
   background: var(--parchment);
-  box-shadow: 0 14px 38px #0008, inset 0 0 0 4px #1e2d24, inset 0 0 0 5px #3b3527;
+  box-shadow: 0 14px 38px #0009, inset 0 0 0 4px #211e18, inset 0 0 0 5px #3b3527;
 }
 
 .reader-card::before,
@@ -118,7 +118,7 @@ select, button {
   color: var(--ink);
   font: inherit;
 }
-select { width: 100%; padding: 0 12px; background: #202e26; }
+select { width: 100%; padding: 0 12px; background: #24211b; }
 select:focus-visible, button:focus-visible { outline: 3px solid #ad874766; outline-offset: 2px; }
 
 .chapter-nav { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 8px; margin-top: 15px; }
@@ -133,7 +133,7 @@ button:disabled, select:disabled { opacity: .52; cursor: not-allowed; }
 }
 .primary-button:hover:not(:disabled) { background: var(--forest-light); }
 .secondary-button { background: transparent; color: var(--forest); font-size: .86rem; }
-.secondary-button:hover:not(:disabled) { background: #26352b; }
+.secondary-button:hover:not(:disabled) { background: #302a20; }
 
 .status {
   min-height: 1.3em;
