@@ -3,8 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#141514">
+    <meta name="theme-color" content="#11100f">
     <title>Daily Verse · Bible Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Manrope:wght@400;500;600&family=Noto+Sans+Ethiopic:wght@400;500;600&family=Noto+Serif+Ethiopic:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
     <script src="./app.js" defer></script>
@@ -17,7 +20,7 @@
           <p class="eyebrow">AASTU · ECSF</p>
           <h1>Daily Verse</h1>
         </div>
-        <span class="header-ornament" aria-hidden="true">✦</span>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch to light theme">☀</button>
       </header>
 
       <section class="reader-card" aria-labelledby="reader-title">

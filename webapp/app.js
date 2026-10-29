@@ -2,8 +2,32 @@
   const telegram = window.Telegram?.WebApp;
   telegram?.ready();
   telegram?.expand();
-  telegram?.setHeaderColor?.("#141514");
-  telegram?.setBackgroundColor?.("#141514");
+
+  const themeButton = document.querySelector("#theme-toggle");
+  const themeIcon = themeButton;
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  function applyTheme(theme, persist = false) {
+    const selected = theme === "light" ? "light" : "dark";
+    const dark = selected === "dark";
+    const color = dark ? "#11100f" : "#f4f0e7";
+    document.documentElement.dataset.theme = selected;
+    themeIcon.textContent = dark ? "☀" : "☾";
+    themeButton.setAttribute("aria-label", `Switch to ${dark ? "light" : "dark"} theme`);
+    themeButton.title = `Switch to ${dark ? "light" : "dark"} theme`;
+    themeButton.setAttribute("aria-pressed", String(!dark));
+    themeMeta?.setAttribute("content", color);
+    telegram?.setHeaderColor?.(color);
+    telegram?.setBackgroundColor?.(color);
+    if (persist) {
+      try { localStorage.setItem("daily-verse-theme", selected); } catch { /* Storage may be unavailable in some webviews. */ }
+    }
+  }
+  let savedTheme = "dark";
+  try { savedTheme = localStorage.getItem("daily-verse-theme") ?? "dark"; } catch { /* Keep dark as the default. */ }
+  applyTheme(savedTheme);
+  themeButton.addEventListener("click", () => {
+    applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
+  });
 
   const bookSelect = document.querySelector("#book-select");
   const chapterSelect = document.querySelector("#chapter-select");
