@@ -8,14 +8,15 @@
 
 :root {
   color-scheme: dark;
-  --page: #11100f;
-  --surface: #1b1917;
-  --surface-raised: #23201d;
+  --page: #050505;
+  --surface: #151515;
+  --surface-raised: #252525;
   --ink: #eee9df;
   --muted: #a9a195;
-  --accent: #b7a985;
-  --accent-strong: #d1c2a1;
-  --line: #39352f;
+  --accent: #888888;
+  --accent-strong: #a2a2a2;
+  --button-ink: #111111;
+  --line: #363636;
   --error: #e3aaa0;
   font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
 }
@@ -28,6 +29,7 @@
   --muted: #777064;
   --accent: #816f4f;
   --accent-strong: #665638;
+  --button-ink: #fffaf0;
   --line: #e2dbce;
   --error: #a34f46;
 }
@@ -92,7 +94,7 @@ h1 {
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 50%;
-  background: transparent;
+  background: var(--surface);
   color: var(--ink);
   font-family: "Manrope", sans-serif;
   font-size: 1.15rem;
@@ -117,16 +119,16 @@ h2 {
 label {
   color: var(--muted);
   font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
-  font-size: .74rem;
+  font-size: .9rem;
   font-weight: 500;
   letter-spacing: .025em;
 }
 select, button {
-  min-height: 46px;
+  min-height: 50px;
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--ink);
-  font: 500 .86rem "Manrope", "Noto Sans Ethiopic", sans-serif;
+  font: 500 1rem "Manrope", "Noto Sans Ethiopic", sans-serif;
 }
 .select-wrap { position: relative; display: block; width: 100%; }
 .select-wrap::after {
@@ -165,11 +167,11 @@ button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
 .primary-button {
   border-color: var(--accent);
   background: var(--accent);
-  color: #171511;
+  color: var(--button-ink);
   font: 500 .9rem "Manrope", "Noto Sans Ethiopic", sans-serif;
 }
 .primary-button:hover:not(:disabled) { border-color: var(--accent-strong); background: var(--accent-strong); }
-.secondary-button { background: transparent; color: var(--muted); font-size: .79rem; }
+.secondary-button { background: var(--surface-raised); color: var(--ink); font-size: .82rem; }
 .secondary-button:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); background: var(--surface-raised); }
 .status {
   min-height: 1.3em;
