@@ -126,8 +126,6 @@
     params.delete("book");
     params.delete("chapter");
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
-    selectors.hidden = true;
-    chapterNav.hidden = true;
     content.replaceChildren();
     setStatus(`Loading Day ${dayNumber}…`);
     try {
@@ -138,6 +136,11 @@
       if (!entry) {
         setStatus("This day is outside the reading plan.", true);
         return;
+      }
+      const firstPassage = entry.passages[0];
+      if (firstPassage) {
+        bookSelect.value = firstPassage.book_id;
+        selectAvailableChapter(firstPassage.chapter);
       }
       readerTitle.textContent = `Day ${entry.day} · ${entry.gregorian_date}`;
       const planLabel = document.createElement("p");
@@ -185,6 +188,7 @@
     params.set("book", book.id);
     params.set("chapter", String(chapterNumber));
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    readerTitle.textContent = "Read a chapter";
     content.replaceChildren();
     setStatus("Loading chapter…");
     openButton.disabled = true;
@@ -228,6 +232,13 @@
         bookSelect.append(option);
       }
       const params = new URLSearchParams(location.search);
+      selectors.hidden = false;
+      chapterNav.hidden = false;
+      const requestedBook = params.get("book");
+      bookSelect.value = books.some((book) => book.id === requestedBook) ? requestedBook : "GEN";
+      if (!currentBook()) bookSelect.selectedIndex = 0;
+      selectAvailableChapter(params.get("chapter") ?? "1");
+      bookSelect.disabled = false;
       const dayParameter = params.get("day");
       if (dayParameter !== null) {
         const dayNumber = Number(dayParameter);
@@ -238,14 +249,7 @@
         await openReadingDay(dayNumber);
         return;
       }
-      const requestedBook = params.get("book");
       readerTitle.textContent = "Read a chapter";
-      selectors.hidden = false;
-      chapterNav.hidden = false;
-      bookSelect.value = books.some((book) => book.id === requestedBook) ? requestedBook : "GEN";
-      if (!currentBook()) bookSelect.selectedIndex = 0;
-      selectAvailableChapter(params.get("chapter") ?? "1");
-      bookSelect.disabled = false;
       setStatus("Choose a book and chapter.");
       await openChapter();
     } catch {
