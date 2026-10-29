@@ -237,3 +237,105 @@ footer span { padding: 0 5px; color: var(--gold); }
   .primary-button { grid-column: 1 / -1; grid-row: 1; }
   .chapter-text { font-size: 1.13rem; line-height: 2; }
 }
+
+/* Quiet, printed-page reading style inspired by the supplied Bible app reference. */
+:root {
+  color-scheme: light;
+  --forest: #496b68;
+  --forest-light: #5e8581;
+  --gold: #a49a78;
+  --paper: #f5f5f2;
+  --parchment: #fff;
+  --ink: #343632;
+  --muted: #85877f;
+  --rule: #e5e6e1;
+  --alert: #a34f46;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+.shell { width: min(100% - 24px, 560px); padding-top: max(12px, env(safe-area-inset-top)); }
+.topbar {
+  gap: 11px;
+  margin: 0 0 8px;
+  padding: 0 3px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+  border-color: #b9c9c5;
+  outline: none;
+  background: #f7faf9;
+  color: var(--forest);
+  font-size: 1.45rem;
+}
+.eyebrow { color: var(--muted); letter-spacing: .12em; }
+h1 { color: var(--ink); font-size: 1.12rem; }
+.header-ornament { color: var(--forest); }
+.reader-card {
+  overflow: visible;
+  padding: 13px 10px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.reader-card::before, .reader-card::after { display: none; }
+.section-kicker { display: none; }
+h2 {
+  margin: 5px 0 18px;
+  color: var(--ink);
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+label { color: var(--muted); }
+select, button { border-color: #d8dad5; color: var(--ink); border-radius: 8px; }
+select { background: #fff; }
+select:focus-visible, button:focus-visible { outline-color: #8ca9a5; }
+.primary-button { border-color: var(--forest); background: var(--forest); color: #fff; }
+.primary-button:hover:not(:disabled) { background: var(--forest-light); }
+.secondary-button { color: var(--forest); }
+.secondary-button:hover:not(:disabled) { background: #edf2f0; }
+.status { color: var(--muted); }
+.status.error { color: var(--alert); }
+.reading-label {
+  border-color: var(--rule);
+  color: #6f716b;
+}
+.reading-warning {
+  border-color: #e4c4bf;
+  background: #fbefed;
+  color: var(--alert);
+}
+.chapter-section + .chapter-section { border-color: var(--rule); }
+.chapter-kicker { color: #829b96; letter-spacing: .13em; }
+.chapter-title {
+  color: #454740;
+  font-size: 1.45rem;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.chapter-ornament { margin: 7px auto 17px; color: #b2aa8c; font-size: .8rem; }
+.chapter-text {
+  color: #4d4e49;
+  font-family: Georgia, "Nyala", "Noto Serif Ethiopic", "Abyssinica SIL", serif;
+  font-size: 1.18rem;
+  line-height: 1.9;
+  text-align: left;
+}
+.verse-number { color: #83a7a2; }
+.first-verse .verse-number { color: #42443e; font-size: 2.25em; }
+.verse-text { color: #4d4e49; }
+footer { color: #96978f; }
+footer span { color: #9eaa97; }
+
+@media (max-width: 390px) {
+  .shell { width: min(100% - 18px, 560px); }
+  .reader-card { padding: 10px 7px 15px; }
+  .chapter-text { font-size: 1.12rem; line-height: 1.85; }
+}
