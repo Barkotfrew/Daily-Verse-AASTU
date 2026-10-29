@@ -339,3 +339,45 @@ footer span { color: #9eaa97; }
   .reader-card { padding: 10px 7px 15px; }
   .chapter-text { font-size: 1.12rem; line-height: 1.85; }
 }
+
+/* App controls use a restrained sans-serif; reserve serif type for Scripture. */
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --forest: #607986;
+  --forest-light: #516b78;
+  --gold: #87949a;
+  --paper: #f3f5f7;
+  --parchment: #fff;
+  --ink: #292e32;
+  --muted: #858d92;
+  --rule: #e4e8ea;
+}
+body { background: var(--paper); }
+.topbar { border-color: var(--rule); }
+.brand-mark {
+  border-color: #d8dfe2;
+  background: #fff;
+  color: #637986;
+  font-family: Georgia, serif;
+  font-size: 1.3rem;
+}
+.eyebrow, h1, h2, label, select, button, .status,
+.reading-label, .chapter-kicker, .chapter-title, footer {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.eyebrow { color: #7d888e; font-weight: 600; letter-spacing: .06em; }
+h1 { color: #282d31; font-weight: 600; }
+h2 { color: #30363a; font-weight: 600; }
+.header-ornament { display: none; }
+.reading-label { color: #69747a; font-size: .95rem; }
+.chapter-kicker { color: #82919a; font-weight: 600; letter-spacing: .1em; }
+.chapter-title {
+  color: #343a3e;
+  font-weight: 500;
+  letter-spacing: .02em;
+}
+.chapter-ornament { color: #a1adb3; }
+.chapter-text { color: #45494b; }
+.verse-number { color: #8499a2; }
+.first-verse .verse-number { color: #43494d; }
+.verse-text { color: #45494b; }
