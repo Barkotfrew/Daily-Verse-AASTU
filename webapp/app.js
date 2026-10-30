@@ -36,7 +36,6 @@
   const nextButton = document.querySelector("#next-button");
   const status = document.querySelector("#status");
   const content = document.querySelector("#chapter-content");
-  const readerTitle = document.querySelector("#reader-title");
   const selectors = document.querySelector("#selectors");
   const chapterNav = document.querySelector("#chapter-nav");
   const dayNav = document.querySelector("#day-nav");
@@ -261,7 +260,6 @@
         bookSelect.value = firstPassage.book_id;
         selectAvailableChapter(firstPassage.chapter);
       }
-      readerTitle.hidden = true;
       const planLabel = document.createElement("p");
       planLabel.className = "reading-label";
       planLabel.textContent = `${entry.ethiopian_date} · ${entry.reading}`;
@@ -310,8 +308,6 @@
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     dayNav.hidden = true;
     returnReadingButton.hidden = currentDay === null;
-    readerTitle.hidden = false;
-    readerTitle.textContent = "Browse Bible";
     content.replaceChildren();
     content.classList.remove("assigned-reading");
     setStatus("Loading chapter…");
@@ -374,8 +370,6 @@
         return;
       }
       browseBible.open = true;
-      readerTitle.hidden = false;
-      readerTitle.textContent = "Read a chapter";
       content.classList.remove("assigned-reading");
       setStatus("Choose a book and chapter.");
       await openChapter();

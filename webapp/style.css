@@ -284,7 +284,6 @@ button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
 .reading-label {
   margin: 0 2px 22px;
   padding: 12px 8px;
-  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   font: 400 .9rem/1.7 "Manrope", "Noto Sans Ethiopic", sans-serif;
