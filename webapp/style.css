@@ -50,21 +50,20 @@ body {
 .topbar {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  height: 58px;
+  justify-content: flex-start;
+  height: 72px;
   margin: 0 2px;
-  padding: 0 48px 8px 2px;
+  padding: 0 48px 8px;
   border-bottom: 1px solid var(--line);
 }
 .brand-logo-wrap {
-  position: absolute;
-  top: 0;
-  left: 50%;
+  position: relative;
   width: 132px;
   height: 42px;
   flex: 0 0 42px;
   overflow: hidden;
-  transform: translateX(-50%);
 }
 .brand-logo {
   position: absolute;
@@ -79,9 +78,8 @@ body {
 .brand-copy {
   position: relative;
   z-index: 1;
-  max-width: calc(50% - 72px);
-  margin-right: auto;
-  text-align: left;
+  max-width: 100%;
+  text-align: center;
 }
 .eyebrow {
   margin: 0 0 2px;
@@ -355,7 +353,6 @@ footer {
 footer span { padding: 0 4px; color: var(--accent); }
 @media (max-width: 390px) {
   .shell { width: min(100% - 20px, 620px); }
-  .brand-copy { max-width: calc(50% - 64px); }
   .brand-logo-wrap { width: 112px; }
   .brand-logo { width: 112px; height: 112px; top: -40.5px; }
   .reader-card { padding: 10px 5px 15px; }
