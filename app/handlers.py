@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     CallbackQuery,
@@ -46,6 +47,16 @@ MAIN_MENU = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True,
 )
+
+
+async def _answer_callback(callback: CallbackQuery, *args: object, **kwargs: object) -> None:
+    """Acknowledge a button tap, ignoring callbacks Telegram has already expired."""
+    try:
+        await callback.answer(*args, **kwargs)
+    except TelegramBadRequest as error:
+        message = str(error).lower()
+        if "query is too old" not in message and "query id is invalid" not in message:
+            raise
 
 
 def _read_chapters_button(day: int, mini_app_url: str, in_private_chat: bool) -> InlineKeyboardButton:
@@ -245,30 +256,31 @@ def build_router(
         try:
             page = int(callback.data.split(":", 1)[1])
         except (AttributeError, ValueError):
-            await callback.answer("That plan page is invalid.", show_alert=True)
+            await _answer_callback(callback, "That plan page is invalid.", show_alert=True)
             return
         total_pages = plan_page_count(plan)
         if not 1 <= page <= total_pages:
-            await callback.answer("That page is outside the reading plan.", show_alert=True)
+            await _answer_callback(callback, "That page is outside the reading plan.", show_alert=True)
             return
+        await _answer_callback(callback)
         if callback.message:
             await callback.message.edit_text(
                 format_plan_page(plan, page),
                 reply_markup=_overview_keyboard(page, total_pages, plan),
             )
-        await callback.answer()
 
     @router.callback_query(F.data.startswith("plan:"))
     async def browse_plan(callback: CallbackQuery) -> None:
         try:
             day = int(callback.data.split(":", 1)[1])
         except (AttributeError, ValueError):
-            await callback.answer("That plan day is invalid.", show_alert=True)
+            await _answer_callback(callback, "That plan day is invalid.", show_alert=True)
             return
         entry = plan.get_day(day)
         if entry is None:
-            await callback.answer("That day is outside the reading plan.", show_alert=True)
+            await _answer_callback(callback, "That day is outside the reading plan.", show_alert=True)
             return
+        await _answer_callback(callback)
         if callback.message:
             await callback.message.edit_text(
                 "Reading Plan · selected day\n" + format_reading_entry(entry),
@@ -279,52 +291,53 @@ def build_router(
                     callback.message.chat.type == "private",
                 ),
             )
-        await callback.answer()
 
     @router.callback_query(F.data.startswith("complete:"))
     async def complete_reading(callback: CallbackQuery) -> None:
         if callback.from_user is None:
-            await callback.answer("Could not identify your Telegram account.", show_alert=True)
+            await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
             return
         try:
             day = int(callback.data.split(":", 1)[1])
         except (AttributeError, ValueError):
-            await callback.answer("That plan day is invalid.", show_alert=True)
+            await _answer_callback(callback, "That plan day is invalid.", show_alert=True)
             return
         if plan.get_day(day) is None:
-            await callback.answer("That day is outside the reading plan.", show_alert=True)
+            await _answer_callback(callback, "That day is outside the reading plan.", show_alert=True)
             return
         inserted = mark_read(database_path, callback.from_user.id, day)
-        await callback.answer("Marked as read." if inserted else "Already marked as read.")
+        await _answer_callback(callback, "Marked as read." if inserted else "Already marked as read.")
 
     @router.callback_query(F.data.startswith("chapters:"))
     async def read_chapters(callback: CallbackQuery) -> None:
         try:
             day = int(callback.data.split(":", 1)[1])
         except (AttributeError, ValueError):
-            await callback.answer("That plan day is invalid.", show_alert=True)
+            await _answer_callback(callback, "That plan day is invalid.", show_alert=True)
             return
         entry = plan.get_day(day)
         if entry is None:
-            await callback.answer("That day is outside the reading plan.", show_alert=True)
+            await _answer_callback(callback, "That day is outside the reading plan.", show_alert=True)
             return
         if bible is None:
-            await callback.answer(
+            await _answer_callback(
+                callback,
                 "Verified Bible text is not installed yet.", show_alert=True
             )
             return
         try:
             passages = parse_reading_assignment(entry.reading)
         except ReferenceParseError:
-            await callback.answer(
+            await _answer_callback(
+                callback,
                 "This reading reference could not be parsed. Please contact an administrator.",
                 show_alert=True,
             )
             return
         if callback.message is None:
-            await callback.answer("Open the bot chat to read chapters.", show_alert=True)
+            await _answer_callback(callback, "Open the bot chat to read chapters.", show_alert=True)
             return
-        await callback.answer("Sending assigned chapters…")
+        await _answer_callback(callback, "Sending assigned chapters…")
         for passage in passages:
             chapter = bible.get_chapter(passage.book.id, passage.chapter)
             if chapter is None:
@@ -378,11 +391,11 @@ def build_router(
     @router.callback_query(F.data == "toggle_reminders")
     async def toggle_reminders(callback: CallbackQuery) -> None:
         if callback.from_user is None:
-            await callback.answer("Could not identify your Telegram account.", show_alert=True)
+            await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
             return
         enabled = not reminders_enabled(database_path, callback.from_user.id)
         set_reminders_enabled(database_path, callback.from_user.id, enabled)
-        await callback.answer("Reminders turned on." if enabled else "Reminders turned off.")
+        await _answer_callback(callback, "Reminders turned on." if enabled else "Reminders turned off.")
         if callback.message:
             label = "Turn reminders off" if enabled else "Turn reminders on"
             status = "on" if enabled else "off"
