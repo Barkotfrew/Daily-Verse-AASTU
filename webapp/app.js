@@ -39,7 +39,14 @@
   const readerTitle = document.querySelector("#reader-title");
   const selectors = document.querySelector("#selectors");
   const chapterNav = document.querySelector("#chapter-nav");
+  const dayNav = document.querySelector("#day-nav");
+  const previousDayButton = document.querySelector("#previous-day");
+  const nextDayButton = document.querySelector("#next-day");
+  const dayCount = document.querySelector("#day-count");
+  const browseBible = document.querySelector("#browse-bible");
+  const returnReadingButton = document.querySelector("#return-reading");
   let books = [];
+  let currentDay = null;
 
   function setStatus(message, isError = false) {
     status.textContent = message;
@@ -125,8 +132,13 @@
     const params = new URLSearchParams(location.search);
     params.delete("book");
     params.delete("chapter");
+    params.set("day", String(dayNumber));
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     content.replaceChildren();
+    currentDay = dayNumber;
+    dayNav.hidden = false;
+    returnReadingButton.hidden = true;
+    browseBible.open = false;
     setStatus(`Loading Day ${dayNumber}…`);
     try {
       const response = await fetch(new URL("assets/readings.json", document.baseURI));
@@ -137,6 +149,9 @@
         setStatus("This day is outside the reading plan.", true);
         return;
       }
+      dayCount.textContent = `Day ${entry.day} of ${plan.entries.length}`;
+      previousDayButton.disabled = entry.day <= plan.entries[0].day;
+      nextDayButton.disabled = entry.day >= plan.entries[plan.entries.length - 1].day;
       const firstPassage = entry.passages[0];
       if (firstPassage) {
         bookSelect.value = firstPassage.book_id;
@@ -188,6 +203,8 @@
     params.set("book", book.id);
     params.set("chapter", String(chapterNumber));
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
+    dayNav.hidden = true;
+    returnReadingButton.hidden = currentDay === null;
     readerTitle.textContent = "Read a chapter";
     content.replaceChildren();
     setStatus("Loading chapter…");
@@ -249,6 +266,7 @@
         await openReadingDay(dayNumber);
         return;
       }
+      browseBible.open = true;
       readerTitle.textContent = "Read a chapter";
       setStatus("Choose a book and chapter.");
       await openChapter();
@@ -277,6 +295,15 @@
       updateNavigation();
       openChapter();
     }
+  });
+  previousDayButton.addEventListener("click", () => {
+    if (currentDay !== null && currentDay > 1) openReadingDay(currentDay - 1);
+  });
+  nextDayButton.addEventListener("click", () => {
+    if (currentDay !== null) openReadingDay(currentDay + 1);
+  });
+  returnReadingButton.addEventListener("click", () => {
+    if (currentDay !== null) openReadingDay(currentDay);
   });
   initialize();
 })();

@@ -45,6 +45,12 @@ class MiniAppBuildTests(unittest.TestCase):
             )
             self.assertEqual(len(readings["entries"]), 231)
             self.assertTrue((output / "index.html").is_file())
+            miniapp_html = (output / "index.html").read_text(encoding="utf-8")
+            miniapp_script = (output / "app.js").read_text(encoding="utf-8")
+            self.assertIn('<summary>Browse Bible</summary>', miniapp_html)
+            self.assertIn('id="previous-day"', miniapp_html)
+            self.assertIn('id="next-day"', miniapp_html)
+            self.assertIn('params.set("day", String(dayNumber))', miniapp_script)
             self.assertEqual(
                 (output / "fonts" / "Benaiah.ttf").read_bytes(),
                 (Path(__file__).resolve().parents[1] / "webapp" / "fonts" / "Benaiah.ttf").read_bytes(),
