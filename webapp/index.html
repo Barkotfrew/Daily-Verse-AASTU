@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#050505">
-    <title>Daily Verse · Bible Reader</title>
+    <title>Daily Chapters · Bible Reader</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Manrope:wght@400;500;600&family=Noto+Sans+Ethiopic:wght@400;500;600&family=Noto+Serif+Ethiopic:wght@400;500&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
           <img class="brand-logo" src="./images/aastu-ecsf-logo.png" alt="AASTU ECSF">
         </div>
         <div class="brand-copy">
-          <h1>Daily Verse</h1>
+          <h1>Daily Chapters</h1>
         </div>
         <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light theme" title="Switch to light theme">☀</button>
       </header>
@@ -32,15 +32,15 @@
         </div>
         <p id="status" class="status" role="status" aria-live="polite">Loading the Bible index…</p>
         <article id="chapter-content" class="chapter-content" aria-live="polite"></article>
-        <details id="saved-bookmarks" class="saved-bookmarks">
-          <summary>Bookmarks <span id="bookmark-count">0</span></summary>
-          <div id="bookmark-list" class="bookmark-list"></div>
-        </details>
         <nav id="day-nav" class="day-nav" aria-label="Reading plan navigation" hidden>
           <button id="previous-day" class="secondary-button" type="button">← Day (Previous)</button>
           <span id="day-count" class="day-count"></span>
           <button id="next-day" class="secondary-button" type="button">Day (Next) →</button>
         </nav>
+        <details id="saved-bookmarks" class="saved-bookmarks">
+          <summary>Bookmarks <span id="bookmark-count">0</span></summary>
+          <div id="bookmark-list" class="bookmark-list"></div>
+        </details>
         <details id="browse-bible" class="browse-bible">
           <summary>Browse Bible</summary>
           <div id="selectors" class="selectors">
@@ -58,7 +58,7 @@
         </details>
       </section>
 
-      <footer><span aria-hidden="true">†</span> Daily Verse · Amharic Bible <span aria-hidden="true">†</span></footer>
+      <footer><span aria-hidden="true">†</span> Daily Chapters · Amharic Bible <span aria-hidden="true">†</span></footer>
     </main>
   </body>
 </html>

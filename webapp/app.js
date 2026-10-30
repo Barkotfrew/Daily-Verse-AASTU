@@ -9,7 +9,7 @@
   function applyTheme(theme, persist = false) {
     const selected = theme === "light" ? "light" : "dark";
     const dark = selected === "dark";
-    const color = dark ? "#050505" : "#f4f0e7";
+    const color = dark ? "#050505" : "#f4f4f3";
     document.documentElement.dataset.theme = selected;
     themeIcon.textContent = dark ? "☀" : "☾";
     themeButton.setAttribute("aria-label", `Switch to ${dark ? "light" : "dark"} theme`);
