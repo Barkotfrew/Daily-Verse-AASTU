@@ -250,12 +250,18 @@
       dayCount.textContent = `Day ${entry.day} of ${plan.entries.length}`;
       previousDayButton.disabled = entry.day <= plan.entries[0].day;
       nextDayButton.disabled = entry.day >= plan.entries[plan.entries.length - 1].day;
+      previousDayButton.textContent = entry.day > plan.entries[0].day
+        ? `← Day ${entry.day - 1}`
+        : "← Day";
+      nextDayButton.textContent = entry.day < plan.entries[plan.entries.length - 1].day
+        ? `Day ${entry.day + 1} →`
+        : "Day →";
       const firstPassage = entry.passages[0];
       if (firstPassage) {
         bookSelect.value = firstPassage.book_id;
         selectAvailableChapter(firstPassage.chapter);
       }
-      readerTitle.textContent = `ቀን ${entry.day} · ${entry.ethiopian_date} / Day ${entry.day} · ${entry.gregorian_date}`;
+      readerTitle.hidden = true;
       const planLabel = document.createElement("p");
       planLabel.className = "reading-label";
       planLabel.textContent = `${entry.ethiopian_date} · ${entry.reading}`;
@@ -303,7 +309,8 @@
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     dayNav.hidden = true;
     returnReadingButton.hidden = currentDay === null;
-    readerTitle.textContent = "Read a chapter";
+    readerTitle.hidden = false;
+    readerTitle.textContent = "Browse Bible";
     content.replaceChildren();
     setStatus("Loading chapter…");
     openButton.disabled = true;
@@ -365,6 +372,7 @@
         return;
       }
       browseBible.open = true;
+      readerTitle.hidden = false;
       readerTitle.textContent = "Read a chapter";
       setStatus("Choose a book and chapter.");
       await openChapter();

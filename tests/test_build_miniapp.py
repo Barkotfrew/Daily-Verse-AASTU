@@ -52,6 +52,9 @@ class MiniAppBuildTests(unittest.TestCase):
             self.assertIn('id="previous-day"', miniapp_html)
             self.assertIn('id="next-day"', miniapp_html)
             self.assertIn('params.set("day", String(dayNumber))', miniapp_script)
+            self.assertIn('`← Day ${entry.day - 1}`', miniapp_script)
+            self.assertIn('`Day ${entry.day + 1} →`', miniapp_script)
+            self.assertIn('readerTitle.hidden = true', miniapp_script)
             self.assertEqual(
                 (output / "fonts" / "Benaiah.ttf").read_bytes(),
                 (Path(__file__).resolve().parents[1] / "webapp" / "fonts" / "Benaiah.ttf").read_bytes(),
