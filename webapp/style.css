@@ -192,29 +192,62 @@ select:focus-visible, button:focus-visible {
   font-size: .76rem;
   white-space: nowrap;
 }
-.browse-bible {
+.browse-bible, .saved-bookmarks {
   margin-top: 24px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.browse-bible summary {
+.browse-bible summary, .saved-bookmarks summary {
   padding: 15px 4px;
   color: var(--muted);
   font: 500 .9rem "Manrope", "Noto Sans Ethiopic", sans-serif;
   cursor: pointer;
   list-style: none;
 }
-.browse-bible summary::-webkit-details-marker { display: none; }
-.browse-bible summary::after {
+.browse-bible summary::-webkit-details-marker, .saved-bookmarks summary::-webkit-details-marker { display: none; }
+.browse-bible summary::after, .saved-bookmarks summary::after {
   float: right;
   color: var(--muted);
   content: "+";
   font-size: 1.15rem;
   line-height: 1;
 }
-.browse-bible[open] summary::after { content: "−"; }
+.browse-bible[open] summary::after, .saved-bookmarks[open] summary::after { content: "−"; }
+.saved-bookmarks summary span { margin-left: 5px; font-size: .78rem; }
 .browse-bible .selectors { padding: 4px 2px 0; }
 .browse-bible .chapter-nav { padding: 0 2px 14px; }
+.bookmark-list { padding: 0 4px 12px; }
+.bookmark-empty { margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
+.bookmark-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+.bookmark-open {
+  flex: 1;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.bookmark-remove { min-height: 36px; color: var(--muted); font-size: .75rem; }
+.verse-bookmark {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  margin-inline-start: 3px;
+  padding: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.verse-bookmark svg { width: 13px; height: 16px; overflow: visible; }
+.verse-bookmark path { fill: transparent; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.verse-bookmark.is-saved { color: var(--accent-strong); }
+.verse-bookmark.is-saved path { fill: currentColor; }
+.verse-bookmark:hover { background: var(--surface-raised); color: var(--ink); }
 .return-reading {
   width: calc(100% - 4px);
   margin: 0 2px 14px;

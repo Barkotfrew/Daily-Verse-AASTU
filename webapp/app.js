@@ -45,8 +45,16 @@
   const dayCount = document.querySelector("#day-count");
   const browseBible = document.querySelector("#browse-bible");
   const returnReadingButton = document.querySelector("#return-reading");
+  const bookmarkCount = document.querySelector("#bookmark-count");
+  const bookmarkList = document.querySelector("#bookmark-list");
   let books = [];
   let currentDay = null;
+  const bookmarkStorageKey = "daily-verse-bookmarks";
+  let bookmarks = [];
+  try {
+    const storedBookmarks = JSON.parse(localStorage.getItem(bookmarkStorageKey) ?? "[]");
+    if (Array.isArray(storedBookmarks)) bookmarks = storedBookmarks;
+  } catch { /* Keep bookmarks available in memory if storage is unavailable. */ }
 
   function setStatus(message, isError = false) {
     status.textContent = message;
@@ -82,16 +90,104 @@
     nextButton.disabled = !book || index < 0 || index >= book.chapters.length - 1;
   }
 
-  function makeVerse(row, isFirst) {
+  function verseKey(bookId, chapter, verse) {
+    return `${bookId}:${chapter}:${verse}`;
+  }
+
+  function persistBookmarks() {
+    try { localStorage.setItem(bookmarkStorageKey, JSON.stringify(bookmarks)); } catch { /* Keep this session usable if storage is unavailable. */ }
+  }
+
+  function renderBookmarks() {
+    bookmarkCount.textContent = String(bookmarks.length);
+    bookmarkList.replaceChildren();
+    if (!bookmarks.length) {
+      const empty = document.createElement("p");
+      empty.className = "bookmark-empty";
+      empty.textContent = "Saved verses will appear here.";
+      bookmarkList.append(empty);
+      return;
+    }
+    for (const item of bookmarks) {
+      const row = document.createElement("div");
+      row.className = "bookmark-row";
+      const open = document.createElement("button");
+      open.className = "bookmark-open";
+      open.type = "button";
+      open.textContent = `${item.amharic} ${item.chapter}:${item.verseLabel}`;
+      open.setAttribute("aria-label", `Open ${item.english} ${item.chapter}:${item.verseLabel}`);
+      open.addEventListener("click", async () => {
+        bookSelect.value = item.bookId;
+        selectAvailableChapter(item.chapter);
+        browseBible.open = true;
+        await openChapter();
+        document.getElementById(`verse-${item.bookId}-${item.chapter}-${item.verse}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      const remove = document.createElement("button");
+      remove.className = "bookmark-remove";
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        bookmarks = bookmarks.filter((bookmark) => bookmark.key !== item.key);
+        persistBookmarks();
+        renderBookmarks();
+        updateVisibleBookmarks();
+      });
+      row.append(open, remove);
+      bookmarkList.append(row);
+    }
+  }
+
+  function updateVisibleBookmarks() {
+    content.querySelectorAll(".verse-bookmark").forEach((button) => {
+      const saved = bookmarks.some((item) => item.key === button.dataset.bookmarkKey);
+      button.classList.toggle("is-saved", saved);
+      button.setAttribute("aria-pressed", String(saved));
+      button.setAttribute("aria-label", saved ? "Remove bookmark" : "Bookmark verse");
+    });
+  }
+
+  function makeVerse(row, isFirst, passage) {
     const verse = document.createElement("span");
     verse.className = isFirst ? "verse first-verse" : "verse";
+    verse.id = `verse-${passage.book_id}-${passage.chapter}-${row.start}`;
+    const key = verseKey(passage.book_id, passage.chapter, row.start);
     const number = document.createElement("sup");
     number.className = "verse-number";
     number.textContent = row.start === row.end ? String(row.start) : `${row.start}–${row.end}`;
     const text = document.createElement("span");
     text.className = "verse-text";
     text.textContent = row.text;
-    verse.append(number, text);
+    const bookmark = document.createElement("button");
+    bookmark.className = "verse-bookmark";
+    bookmark.type = "button";
+    bookmark.dataset.bookmarkKey = key;
+    bookmark.innerHTML = '<svg viewBox="0 0 16 20" aria-hidden="true"><path d="M3 2.5h10v15l-5-3.2-5 3.2z"/></svg>';
+    const saved = bookmarks.some((item) => item.key === key);
+    bookmark.classList.toggle("is-saved", saved);
+    bookmark.setAttribute("aria-pressed", String(saved));
+    bookmark.setAttribute("aria-label", saved ? "Remove bookmark" : "Bookmark verse");
+    bookmark.title = saved ? "Remove bookmark" : "Bookmark verse";
+    bookmark.addEventListener("click", () => {
+      if (bookmarks.some((item) => item.key === key)) {
+        bookmarks = bookmarks.filter((item) => item.key !== key);
+      } else {
+        bookmarks.push({
+          key,
+          bookId: passage.book_id,
+          english: passage.english,
+          amharic: passage.amharic,
+          chapter: passage.chapter,
+          verse: row.start,
+          verseLabel: row.start === row.end ? String(row.start) : `${row.start}–${row.end}`,
+        });
+      }
+      persistBookmarks();
+      renderBookmarks();
+      updateVisibleBookmarks();
+    });
+    verse.append(number, text, bookmark);
     return verse;
   }
 
@@ -112,11 +208,13 @@
     text.className = "chapter-text";
     chapter.verses.forEach((row, index) => {
       if (index) text.append(document.createTextNode(" "));
-      text.append(makeVerse(row, index === 0));
+      text.append(makeVerse(row, index === 0, passage));
     });
     section.append(kicker, heading, ornament, text);
     content.append(section);
   }
+
+  renderBookmarks();
 
   async function loadChapterAsset(passage) {
     const asset = new URL(
