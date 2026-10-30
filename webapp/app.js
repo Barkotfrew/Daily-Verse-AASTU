@@ -265,6 +265,7 @@
       const planLabel = document.createElement("p");
       planLabel.className = "reading-label";
       planLabel.textContent = `${entry.ethiopian_date} · ${entry.reading}`;
+      content.classList.add("assigned-reading");
       content.append(planLabel);
       setStatus("Loading assigned chapters…");
 
@@ -312,6 +313,7 @@
     readerTitle.hidden = false;
     readerTitle.textContent = "Browse Bible";
     content.replaceChildren();
+    content.classList.remove("assigned-reading");
     setStatus("Loading chapter…");
     openButton.disabled = true;
     try {
@@ -374,6 +376,7 @@
       browseBible.open = true;
       readerTitle.hidden = false;
       readerTitle.textContent = "Read a chapter";
+      content.classList.remove("assigned-reading");
       setStatus("Choose a book and chapter.");
       await openChapter();
     } catch {

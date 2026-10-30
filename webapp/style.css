@@ -277,10 +277,12 @@ button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
   font-size: .8rem;
   text-align: center;
 }
+.status:empty { display: none; }
 .status.error { color: var(--error); }
 .chapter-content { margin-top: 12px; }
+.chapter-content.assigned-reading { margin-top: 0; }
 .reading-label {
-  margin: 10px 2px 22px;
+  margin: 0 2px 22px;
   padding: 12px 8px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
