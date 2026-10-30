@@ -18,6 +18,7 @@
   --button-ink: #111111;
   --line: #363636;
   --error: #e3aaa0;
+  --brand: #079bd7;
   font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
 }
 :root[data-theme="light"] {
@@ -32,6 +33,7 @@
   --button-ink: #ffffff;
   --line: #d8d8d7;
   --error: #a34f46;
+  --brand: #087eb5;
 }
 * { box-sizing: border-box; }
 body {
@@ -59,19 +61,20 @@ body {
 }
 .brand-logo-wrap {
   position: relative;
-  width: 108px;
-  height: 34px;
-  flex: 0 0 108px;
+  width: 132px;
+  height: 42px;
+  flex: 0 0 132px;
   overflow: hidden;
 }
 .brand-logo {
   position: absolute;
-  top: -39px;
+  top: -47.5px;
   left: 0;
   display: block;
-  width: 108px;
-  height: 108px;
+  width: 132px;
+  height: 132px;
   object-fit: contain;
+  filter: grayscale(1);
 }
 .brand-copy { min-width: 0; text-align: center; }
 .eyebrow {
@@ -84,10 +87,10 @@ body {
 }
 h1 {
   margin: 0;
-  color: var(--ink);
+  color: var(--brand);
   font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: 1.55rem;
-  font-weight: 500;
+  font-size: 1.7rem;
+  font-weight: 600;
   line-height: 1;
 }
 .theme-toggle {
@@ -97,6 +100,8 @@ h1 {
   display: grid;
   width: 40px;
   height: 40px;
+  min-height: 40px;
+  aspect-ratio: 1;
   flex: 0 0 40px;
   place-items: center;
   margin: 0;
