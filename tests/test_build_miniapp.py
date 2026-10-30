@@ -49,6 +49,10 @@ class MiniAppBuildTests(unittest.TestCase):
                 (output / "fonts" / "Benaiah.ttf").read_bytes(),
                 (Path(__file__).resolve().parents[1] / "webapp" / "fonts" / "Benaiah.ttf").read_bytes(),
             )
+            self.assertEqual(
+                (output / "images" / "aastu-ecsf-logo.png").read_bytes(),
+                (Path(__file__).resolve().parents[1] / "webapp" / "images" / "aastu-ecsf-logo.png").read_bytes(),
+            )
 
 
 if __name__ == "__main__":

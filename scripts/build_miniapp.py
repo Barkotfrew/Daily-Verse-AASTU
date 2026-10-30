@@ -35,6 +35,7 @@ def build_site(
     for filename in ("index.html", "app.js", "style.css"):
         shutil.copy2(WEBAPP_SOURCE / filename, output / filename)
     shutil.copytree(WEBAPP_SOURCE / "fonts", output / "fonts")
+    shutil.copytree(WEBAPP_SOURCE / "images", output / "images")
 
     chapter_count = 0
     books_index = []
