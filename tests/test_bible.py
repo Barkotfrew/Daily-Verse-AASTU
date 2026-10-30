@@ -54,6 +54,15 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIn("አንተ። አብራምን", chapter.verses[22].text)
         self.assertIn("ይውሰዱ።", chapter.verses[23].text)
 
+    def test_job_41_has_26_verses_and_is_complete(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter = source.get_chapter("JOB", 41)
+
+        self.assertTrue(chapter.complete)
+        self.assertEqual(len(chapter.verses), 26)
+        self.assertEqual(chapter.verses[-1].start, 26)
+
     def test_combined_verse_number_resolves_to_range_without_fabricating_text(self) -> None:
         verse_two = self.bible.get_verse("genesis", 1, 2)
         verse_three = self.bible.get_verse("genesis", 1, 3)

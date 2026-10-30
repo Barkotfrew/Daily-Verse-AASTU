@@ -142,7 +142,7 @@
         bookSelect.value = firstPassage.book_id;
         selectAvailableChapter(firstPassage.chapter);
       }
-      readerTitle.textContent = `Day ${entry.day} · ${entry.gregorian_date}`;
+      readerTitle.textContent = `ቀን ${entry.day} · ${entry.ethiopian_date} / Day ${entry.day} · ${entry.gregorian_date}`;
       const planLabel = document.createElement("p");
       planLabel.className = "reading-label";
       planLabel.textContent = `${entry.ethiopian_date} · ${entry.reading}`;
