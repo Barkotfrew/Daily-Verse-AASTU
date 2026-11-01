@@ -49,37 +49,38 @@ body {
 }
 .topbar {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  height: 72px;
+  display: block;
+  height: 58px;
   margin: 0 2px;
-  padding: 0 48px 8px;
+  padding: 0 48px 8px 2px;
   border-bottom: 1px solid var(--line);
 }
 .brand-logo-wrap {
-  position: relative;
-  width: 132px;
-  height: 42px;
-  flex: 0 0 42px;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 94px;
+  height: 30px;
   overflow: hidden;
+  transform: translateY(-50%);
 }
 .brand-logo {
   position: absolute;
-  top: -47.5px;
+  top: -32px;
   left: 0;
   display: block;
-  width: 132px;
-  height: 132px;
+  width: 94px;
+  height: 94px;
   object-fit: contain;
   filter: grayscale(1);
 }
 .brand-copy {
-  position: relative;
-  z-index: 1;
-  max-width: 100%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: calc(100% - 154px);
   text-align: center;
+  transform: translate(-50%, -50%);
 }
 .eyebrow {
   margin: 0 0 2px;
@@ -93,7 +94,7 @@ h1 {
   margin: 0;
   color: var(--ink);
   font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: clamp(.9rem, 4.25vw, 1.3rem);
+  font-size: clamp(.85rem, 3.8vw, 1.15rem);
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -353,8 +354,7 @@ footer {
 footer span { padding: 0 4px; color: var(--accent); }
 @media (max-width: 390px) {
   .shell { width: min(100% - 20px, 620px); }
-  .brand-logo-wrap { width: 112px; }
-  .brand-logo { width: 112px; height: 112px; top: -40.5px; }
+  .brand-copy { max-width: calc(100% - 140px); }
   .reader-card { padding: 10px 5px 15px; }
   .reader-card { padding-top: 4px; }
   .chapter-nav { grid-template-columns: 1fr 1fr; }
