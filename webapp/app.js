@@ -288,7 +288,8 @@
         setStatus("This day is outside the reading plan.", true);
         return;
       }
-      readingDate.textContent = `${entry.ethiopian_date} / ${entry.reading}`;
+      const displayedReading = entry.reading.replace(/(\d)-(\d)/g, "$1–$2");
+      readingDate.textContent = `${entry.ethiopian_date} / ${displayedReading}`;
       readingDate.hidden = false;
       dayCount.textContent = `Day ${entry.day} of ${plan.entries.length}`;
       previousDayButton.disabled = entry.day <= plan.entries[0].day;

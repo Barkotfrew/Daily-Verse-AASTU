@@ -100,7 +100,7 @@ h1 {
   color: var(--ink);
   font-family: "Cormorant Garamond", Georgia, serif;
   font-size: clamp(1.4rem, 5vw, 2rem);
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -130,7 +130,7 @@ h1 {
   margin: 25px 2px 0;
   padding: 0;
   color: var(--muted);
-  font: 400 1rem/1.55 "Manrope", "Noto Sans Ethiopic", sans-serif;
+  font: 400 1rem/1.55 "Noto Serif Ethiopic", "Cormorant Garamond", serif;
   text-align: left;
 }
 .reading-date[hidden], .chapter-tabs[hidden] { display: none; }
@@ -407,18 +407,18 @@ footer span { padding: 0 4px; color: var(--accent); }
 }
 @media (min-width: 900px) {
   .topbar { padding-top: 22px; }
-  .brand-lockup { gap: 22px; }
+  .brand-lockup { gap: 38px; }
   .brand-logo-wrap { flex-basis: 76px; width: 300px; height: 76px; }
   .brand-logo { top: -112px; width: 300px; height: 300px; }
   h1 { font-size: clamp(2.6rem, 4vw, 3.8rem); }
-  .theme-toggle { width: 72px; height: 72px; min-height: 72px; flex-basis: 72px; font-size: 1.7rem; }
-  .reading-date { margin-top: 30px; font-size: 1.8rem; }
+  .theme-toggle { width: 104px; height: 104px; min-height: 104px; flex-basis: 104px; margin-top: 28px; font-size: 2.25rem; }
+  .reading-date { margin-top: 38px; font-size: 2rem; }
   .chapter-tabs { gap: 20px; margin-top: 62px; margin-bottom: 102px; }
-  .chapter-tab { min-height: 98px; border-radius: 999px; font-size: 1.8rem; }
+  .chapter-tab { min-height: 98px; border-radius: 999px; font-size: 2rem; }
   .chapter-section { max-width: 900px; }
-  .chapter-kicker { margin-bottom: 12px; font-size: 1.35rem; letter-spacing: .18em; }
-  .chapter-title { font-size: 4rem; }
-  .chapter-ornament { margin: 24px auto 35px; font-size: 1.3rem; }
+  .chapter-kicker { margin-bottom: 12px; font-size: 1.8rem; letter-spacing: .18em; }
+  .chapter-title { font-size: 5rem; }
+  .chapter-ornament { margin: 24px auto 35px; font-size: 1.5rem; }
   .chapter-text { font-size: 1.6rem; line-height: 2; }
 }
 
