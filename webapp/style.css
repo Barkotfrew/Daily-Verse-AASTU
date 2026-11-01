@@ -322,9 +322,9 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 }
 .chapter-ornament::before, .chapter-ornament::after { width: 52px; height: 1px; background: var(--border); content: ""; }
 .chapter-verses { display: grid; gap: 4px; }
-.verse-row { display: flex; align-items: flex-start; gap: 4px; padding: 12px; border-radius: 12px; transition: background-color 150ms ease; }
+.verse-row { display: flex; align-items: flex-start; gap: 4px; padding: 12px clamp(8px, 3vw, 12px); border-radius: 12px; transition: background-color 150ms ease; }
 .verse-row.is-selected { background: var(--surface); }
-.verse-select { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; }
+.verse-select { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: clamp(18px, 5vw, 20px) minmax(0, 1fr); align-items: start; gap: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; }
 .verse-number {
   padding-top: .35em;
   color: var(--muted);
@@ -333,7 +333,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
   text-align: right;
 }
 .verse-row.is-bookmarked .verse-number { color: var(--foreground); }
-.verse-text { min-width: 0; color: var(--foreground); font: 400 var(--verse-font-size)/1.9 "Noto Serif Ethiopic", serif; text-wrap: pretty; overflow-wrap: anywhere; }
+.verse-text { min-width: 0; color: var(--foreground); font: 400 var(--verse-font-size)/1.9 "Noto Serif Ethiopic", serif; text-align: justify; text-align-last: left; text-wrap: pretty; overflow-wrap: anywhere; }
 .chapter-empty { max-width: 440px; margin: 38px auto; color: var(--muted); font: 400 14px/1.7 "Noto Sans Ethiopic", sans-serif; text-align: center; }
 .site-footer {
   padding: 12px 16px 18px;
