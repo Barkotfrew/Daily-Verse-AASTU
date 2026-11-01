@@ -48,9 +48,10 @@ body {
   padding: max(14px, env(safe-area-inset-top)) 0 max(28px, env(safe-area-inset-bottom));
 }
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   min-height: 58px;
   margin: 0 2px;
   padding: 0 2px 8px;
@@ -58,6 +59,7 @@ body {
 }
 .brand-lockup {
   display: flex;
+  max-width: calc(100% - 52px);
   min-width: 0;
   align-items: center;
   gap: 10px;
@@ -93,13 +95,16 @@ body {
 h1 {
   margin: 0;
   color: var(--ink);
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: clamp(.85rem, 3.8vw, 1.15rem);
-  font-weight: 600;
+  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
+  font-size: clamp(.82rem, 3.6vw, 1rem);
+  font-weight: 500;
   line-height: 1;
   white-space: nowrap;
 }
 .theme-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
   display: grid;
   width: 40px;
   height: 40px;
@@ -115,6 +120,7 @@ h1 {
   color: var(--ink);
   font-family: "Manrope", sans-serif;
   font-size: 1.15rem;
+  transform: translateY(-50%);
 }
 .theme-toggle:hover { background: var(--surface-raised); }
 .reader-card { padding: 4px 8px 18px; }
