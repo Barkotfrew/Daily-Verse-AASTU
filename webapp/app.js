@@ -36,6 +36,8 @@
   const nextButton = document.querySelector("#next-button");
   const status = document.querySelector("#status");
   const content = document.querySelector("#chapter-content");
+  const readingDate = document.querySelector("#reading-date");
+  const chapterTabs = document.querySelector("#chapter-tabs");
   const selectors = document.querySelector("#selectors");
   const chapterNav = document.querySelector("#chapter-nav");
   const dayNav = document.querySelector("#day-nav");
@@ -193,6 +195,7 @@
   function appendChapter(passage, chapter) {
     const section = document.createElement("section");
     section.className = "chapter-section";
+    section.id = `assigned-chapter-${passage.book_id}-${passage.chapter}`;
     const kicker = document.createElement("p");
     kicker.className = "chapter-kicker";
     kicker.textContent = `${passage.english} · CHAPTER ${passage.chapter}`;
@@ -211,6 +214,35 @@
     });
     section.append(kicker, heading, ornament, text);
     content.append(section);
+    return section;
+  }
+
+  function renderChapterTabs(passages) {
+    chapterTabs.replaceChildren();
+    for (const [index, passage] of passages.entries()) {
+      const button = document.createElement("button");
+      button.className = "chapter-tab";
+      button.type = "button";
+      button.textContent = `${index === 0 ? "✓ " : ""}${passage.amharic} ${passage.chapter}`;
+      button.setAttribute("aria-label", `Go to ${passage.amharic} chapter ${passage.chapter}`);
+      button.setAttribute("aria-current", index === 0 ? "location" : "false");
+      if (index === 0) button.classList.add("is-active");
+      button.addEventListener("click", () => {
+        chapterTabs.querySelectorAll(".chapter-tab").forEach((tab) => {
+          const active = tab === button;
+          tab.classList.toggle("is-active", active);
+          tab.setAttribute("aria-current", active ? "location" : "false");
+          const tabPassage = passages.find((item) =>
+            tab.getAttribute("aria-label") === `Go to ${item.amharic} chapter ${item.chapter}`,
+          );
+          if (tabPassage) tab.textContent = `${active ? "✓ " : ""}${tabPassage.amharic} ${tabPassage.chapter}`;
+        });
+        document.getElementById(`assigned-chapter-${passage.book_id}-${passage.chapter}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      chapterTabs.append(button);
+    }
+    chapterTabs.hidden = passages.length === 0;
   }
 
   renderBookmarks();
@@ -233,6 +265,9 @@
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     content.replaceChildren();
     currentDay = dayNumber;
+    readingDate.hidden = true;
+    chapterTabs.hidden = true;
+    chapterTabs.replaceChildren();
     dayNav.hidden = false;
     returnReadingButton.hidden = true;
     browseBible.open = false;
@@ -246,6 +281,8 @@
         setStatus("This day is outside the reading plan.", true);
         return;
       }
+      readingDate.textContent = `${entry.ethiopian_date} / ${entry.reading}`;
+      readingDate.hidden = false;
       dayCount.textContent = `Day ${entry.day} of ${plan.entries.length}`;
       previousDayButton.disabled = entry.day <= plan.entries[0].day;
       nextDayButton.disabled = entry.day >= plan.entries[plan.entries.length - 1].day;
@@ -260,11 +297,7 @@
         bookSelect.value = firstPassage.book_id;
         selectAvailableChapter(firstPassage.chapter);
       }
-      const planLabel = document.createElement("p");
-      planLabel.className = "reading-label";
-      planLabel.textContent = `${entry.ethiopian_date} · ${entry.reading}`;
       content.classList.add("assigned-reading");
-      content.append(planLabel);
       setStatus("Loading assigned chapters…");
 
       const loaded = await Promise.all(entry.passages.map(async (passage) => {
@@ -275,13 +308,16 @@
         }
       }));
       const missing = [];
+      const availablePassages = [];
       for (const item of loaded) {
         if (item.error || !item.chapter || !item.chapter.complete || !item.chapter.verses.length) {
           missing.push(`${item.passage.english} ${item.passage.chapter}`);
           continue;
         }
         appendChapter(item.passage, item.chapter);
+        availablePassages.push(item.passage);
       }
+      renderChapterTabs(availablePassages);
       if (missing.length) {
         const warning = document.createElement("p");
         warning.className = "reading-warning";
@@ -307,6 +343,8 @@
     params.set("chapter", String(chapterNumber));
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     dayNav.hidden = true;
+    readingDate.hidden = true;
+    chapterTabs.hidden = true;
     returnReadingButton.hidden = currentDay === null;
     content.replaceChildren();
     content.classList.remove("assigned-reading");

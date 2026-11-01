@@ -16,6 +16,8 @@
   --accent: #888888;
   --accent-strong: #a2a2a2;
   --button-ink: #111111;
+  --tab-active: #f4f4f3;
+  --tab-active-ink: #151515;
   --line: #363636;
   --error: #e3aaa0;
   font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
@@ -30,6 +32,8 @@
   --accent: #858585;
   --accent-strong: #6e6e6e;
   --button-ink: #ffffff;
+  --tab-active: #292929;
+  --tab-active-ink: #ffffff;
   --line: #cfcfcf;
   --error: #a34f46;
 }
@@ -52,32 +56,32 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 58px;
+  min-height: 100px;
   margin: 0 2px;
-  padding: 0 2px 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 10px 2px 14px;
 }
 .brand-lockup {
   display: flex;
+  flex-direction: column;
   max-width: calc(100% - 52px);
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 1px;
 }
 .brand-logo-wrap {
   position: relative;
-  flex: 0 0 76px;
-  width: 76px;
-  height: 30px;
+  flex: 0 0 36px;
+  width: 140px;
+  height: 36px;
   overflow: hidden;
 }
 .brand-logo {
   position: absolute;
-  top: -26px;
+  top: -52px;
   left: 0;
   display: block;
-  width: 76px;
-  height: 76px;
+  width: 140px;
+  height: 140px;
   object-fit: contain;
   filter: grayscale(1);
 }
@@ -95,8 +99,8 @@ body {
 h1 {
   margin: 0;
   color: var(--ink);
-  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
-  font-size: clamp(.82rem, 3.6vw, 1rem);
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: clamp(1.15rem, 4.5vw, 1.4rem);
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -123,6 +127,43 @@ h1 {
   transform: translateY(-50%);
 }
 .theme-toggle:hover { background: var(--surface-raised); }
+.reading-date {
+  max-width: 620px;
+  margin: 10px auto 0;
+  padding: 0 8px;
+  color: var(--muted);
+  font: 400 .9rem/1.55 "Manrope", "Noto Sans Ethiopic", sans-serif;
+  text-align: center;
+}
+.reading-date[hidden], .chapter-tabs[hidden] { display: none; }
+.chapter-tabs {
+  display: flex;
+  max-width: 620px;
+  gap: 8px;
+  margin: 24px auto 28px;
+  padding: 0 2px 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.chapter-tabs::-webkit-scrollbar { display: none; }
+.chapter-tab {
+  flex: 1 0 auto;
+  min-width: 88px;
+  min-height: 42px;
+  padding: 0 17px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 .86rem "Manrope", "Noto Sans Ethiopic", sans-serif;
+  white-space: nowrap;
+}
+.chapter-tab.is-active {
+  border-color: var(--tab-active);
+  background: var(--tab-active);
+  color: var(--tab-active-ink);
+}
+.chapter-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--ink); }
 .reader-card { padding: 4px 8px 18px; }
 .section-kicker { display: none; }
 h2 {
@@ -356,9 +397,8 @@ footer {
 footer span { padding: 0 4px; color: var(--accent); }
 @media (max-width: 390px) {
   .shell { width: min(100% - 20px, 620px); }
-  .brand-lockup { gap: 7px; }
-  .brand-logo-wrap { flex-basis: 66px; width: 66px; }
-  .brand-logo { width: 66px; height: 66px; top: -22px; }
+  .brand-logo-wrap { width: 132px; }
+  .brand-logo { width: 132px; height: 132px; top: -49px; }
   .reader-card { padding: 10px 5px 15px; }
   .reader-card { padding-top: 4px; }
   .chapter-nav { grid-template-columns: 1fr 1fr; }
