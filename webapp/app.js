@@ -6,12 +6,18 @@
   const themeButton = document.querySelector("#theme-toggle");
   const themeIcon = themeButton;
   const themeMeta = document.querySelector('meta[name="theme-color"]');
+  const icons = {
+    sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>',
+    moon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>',
+    bookmark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.75A1.75 1.75 0 0 1 7.75 3h8.5A1.75 1.75 0 0 1 18 4.75V21l-6-4-6 4z"/></svg>',
+  };
   function applyTheme(theme, persist = false) {
     const selected = theme === "light" ? "light" : "dark";
     const dark = selected === "dark";
     const color = dark ? "#050505" : "#f4f4f3";
     document.documentElement.dataset.theme = selected;
-    themeIcon.textContent = dark ? "☀" : "☾";
+    themeIcon.innerHTML = dark ? icons.sun : icons.moon;
     themeButton.setAttribute("aria-label", `Switch to ${dark ? "light" : "dark"} theme`);
     themeButton.title = `Switch to ${dark ? "light" : "dark"} theme`;
     themeButton.setAttribute("aria-pressed", String(!dark));
@@ -48,18 +54,55 @@
   const returnReadingButton = document.querySelector("#return-reading");
   const bookmarkCount = document.querySelector("#bookmark-count");
   const bookmarkList = document.querySelector("#bookmark-list");
+  const progressFill = document.querySelector("#reading-progress-fill");
+  const fontDecrease = document.querySelector("#font-decrease");
+  const fontIncrease = document.querySelector("#font-increase");
   let books = [];
   let currentDay = null;
   const bookmarkStorageKey = "daily-verse-bookmarks";
+  const readChapterStorageKey = "daily-verse-read-chapters";
+  const fontSizeStorageKey = "daily-verse-font-size";
   let bookmarks = [];
+  let readChapters = [];
+  let verseFontSize = 18;
   try {
     const storedBookmarks = JSON.parse(localStorage.getItem(bookmarkStorageKey) ?? "[]");
     if (Array.isArray(storedBookmarks)) bookmarks = storedBookmarks;
   } catch { /* Keep bookmarks available in memory if storage is unavailable. */ }
+  try {
+    const storedReadChapters = JSON.parse(localStorage.getItem(readChapterStorageKey) ?? "[]");
+    if (Array.isArray(storedReadChapters)) readChapters = storedReadChapters;
+    const savedSize = Number(localStorage.getItem(fontSizeStorageKey));
+    if (savedSize >= 16 && savedSize <= 24) verseFontSize = savedSize;
+  } catch { /* Keep reading controls usable if storage is unavailable. */ }
+
+  function applyVerseFontSize() {
+    document.documentElement.style.setProperty("--verse-font-size", `${verseFontSize}px`);
+    fontDecrease.disabled = verseFontSize <= 16;
+    fontIncrease.disabled = verseFontSize >= 24;
+  }
+  applyVerseFontSize();
+  fontDecrease.addEventListener("click", () => {
+    verseFontSize = Math.max(16, verseFontSize - 1);
+    applyVerseFontSize();
+    try { localStorage.setItem(fontSizeStorageKey, String(verseFontSize)); } catch { /* Keep this session usable without storage. */ }
+  });
+  fontIncrease.addEventListener("click", () => {
+    verseFontSize = Math.min(24, verseFontSize + 1);
+    applyVerseFontSize();
+    try { localStorage.setItem(fontSizeStorageKey, String(verseFontSize)); } catch { /* Keep this session usable without storage. */ }
+  });
 
   function setStatus(message, isError = false) {
     status.textContent = message;
     status.classList.toggle("error", isError);
+  }
+
+  function showEmptyChapter() {
+    const empty = document.createElement("p");
+    empty.className = "chapter-empty";
+    empty.textContent = "This chapter will appear here once it's loaded from the bot.";
+    content.append(empty);
   }
 
   function currentBook() {
@@ -143,18 +186,24 @@
   function updateVisibleBookmarks() {
     content.querySelectorAll(".verse-bookmark").forEach((button) => {
       const saved = bookmarks.some((item) => item.key === button.dataset.bookmarkKey);
+      button.closest(".verse-row")?.classList.toggle("is-bookmarked", saved);
       button.classList.toggle("is-saved", saved);
       button.setAttribute("aria-pressed", String(saved));
       button.setAttribute("aria-label", saved ? "Remove bookmark" : "Bookmark verse");
     });
   }
 
-  function makeVerse(row, isFirst, passage) {
-    const verse = document.createElement("span");
-    verse.className = isFirst ? "verse first-verse" : "verse";
+  function makeVerse(row, passage) {
+    const verse = document.createElement("div");
+    verse.className = "verse-row";
     verse.id = `verse-${passage.book_id}-${passage.chapter}-${row.start}`;
     const key = verseKey(passage.book_id, passage.chapter, row.start);
-    const number = document.createElement("sup");
+    const select = document.createElement("button");
+    select.className = "verse-select";
+    select.type = "button";
+    select.setAttribute("aria-pressed", "false");
+    select.setAttribute("aria-label", `Select ${passage.amharic} ${passage.chapter}, verse ${row.start}`);
+    const number = document.createElement("span");
     number.className = "verse-number";
     number.textContent = row.start === row.end ? String(row.start) : `${row.start}–${row.end}`;
     const text = document.createElement("span");
@@ -164,12 +213,25 @@
     bookmark.className = "verse-bookmark";
     bookmark.type = "button";
     bookmark.dataset.bookmarkKey = key;
-    bookmark.innerHTML = '<svg viewBox="0 0 16 20" aria-hidden="true"><path d="M3 2.5h10v15l-5-3.2-5 3.2z"/></svg>';
+    bookmark.innerHTML = icons.bookmark;
     const saved = bookmarks.some((item) => item.key === key);
+    verse.classList.toggle("is-bookmarked", saved);
     bookmark.classList.toggle("is-saved", saved);
     bookmark.setAttribute("aria-pressed", String(saved));
     bookmark.setAttribute("aria-label", saved ? "Remove bookmark" : "Bookmark verse");
     bookmark.title = saved ? "Remove bookmark" : "Bookmark verse";
+    select.append(number, text);
+    select.addEventListener("click", () => {
+      const wasSelected = verse.classList.contains("is-selected");
+      content.querySelectorAll(".verse-row.is-selected").forEach((item) => {
+        item.classList.remove("is-selected");
+        item.querySelector(".verse-select")?.setAttribute("aria-pressed", "false");
+      });
+      if (!wasSelected) {
+        verse.classList.add("is-selected");
+        select.setAttribute("aria-pressed", "true");
+      }
+    });
     bookmark.addEventListener("click", () => {
       if (bookmarks.some((item) => item.key === key)) {
         bookmarks = bookmarks.filter((item) => item.key !== key);
@@ -188,7 +250,7 @@
       renderBookmarks();
       updateVisibleBookmarks();
     });
-    verse.append(number, text, bookmark);
+    verse.append(select, bookmark);
     return verse;
   }
 
@@ -205,14 +267,13 @@
     const ornament = document.createElement("span");
     ornament.className = "chapter-ornament";
     ornament.setAttribute("aria-hidden", "true");
-    ornament.textContent = "✦";
-    const text = document.createElement("p");
-    text.className = "chapter-text";
+    ornament.textContent = "◆";
+    const verses = document.createElement("div");
+    verses.className = "chapter-verses";
     chapter.verses.forEach((row, index) => {
-      if (index) text.append(document.createTextNode(" "));
-      text.append(makeVerse(row, index === 0, passage));
+      verses.append(makeVerse(row, passage));
     });
-    section.append(kicker, heading, ornament, text);
+    section.append(kicker, heading, ornament, verses);
     content.append(section);
     return section;
   }
@@ -224,32 +285,76 @@
     return `${numberedPrefix}${firstWord.length > 3 ? firstWord.slice(0, 2).join("") : firstWord.join("")}`;
   }
 
-  function renderChapterTabs(passages) {
+  function chapterReadKey(dayNumber, passage) {
+    return `${dayNumber}:${passage.book_id}:${passage.chapter}`;
+  }
+
+  function updateReadingProgress(passages, dayNumber) {
+    const total = passages.length;
+    const completed = passages.filter(({ passage }) => readChapters.includes(chapterReadKey(dayNumber, passage))).length;
+    progressFill.style.width = `${total ? (completed / total) * 100 : 0}%`;
+  }
+
+  function renderChapterTabs(passages, dayNumber) {
     chapterTabs.replaceChildren();
     const activeIndex = passages.findIndex((item) => item.available);
     for (const [index, item] of passages.entries()) {
       const { passage, available } = item;
-      const button = document.createElement("button");
-      button.className = "chapter-tab";
-      button.type = "button";
-      button.textContent = `✓ ${shortBookName(passage.amharic)} ${passage.chapter}`;
-      button.setAttribute("aria-label", `Go to ${passage.amharic} chapter ${passage.chapter}`);
-      button.disabled = !available;
-      button.setAttribute("aria-current", index === activeIndex ? "location" : "false");
-      if (index === activeIndex) button.classList.add("is-active");
-      button.addEventListener("click", () => {
+      const key = chapterReadKey(dayNumber, passage);
+      const isRead = readChapters.includes(key);
+      const tab = document.createElement("div");
+      tab.className = "chapter-tab";
+      tab.classList.toggle("is-active", index === activeIndex);
+      tab.classList.toggle("is-read", isRead);
+
+      const select = document.createElement("button");
+      select.className = "chapter-tab-select";
+      select.type = "button";
+      select.textContent = shortBookName(passage.amharic) + " " + passage.chapter;
+      select.disabled = !available;
+      select.setAttribute("aria-label", `Open ${passage.amharic} chapter ${passage.chapter}`);
+      select.setAttribute("aria-current", index === activeIndex ? "location" : "false");
+      select.addEventListener("click", () => {
         if (!available) return;
-        chapterTabs.querySelectorAll(".chapter-tab").forEach((tab) => {
-          const active = tab === button;
-          tab.classList.toggle("is-active", active);
-          tab.setAttribute("aria-current", active ? "location" : "false");
+        chapterTabs.querySelectorAll(".chapter-tab").forEach((otherTab) => {
+          const active = otherTab === tab;
+          otherTab.classList.toggle("is-active", active);
+          otherTab.querySelector(".chapter-tab-select")?.setAttribute("aria-current", active ? "location" : "false");
         });
+        bookSelect.value = passage.book_id;
+        selectAvailableChapter(passage.chapter);
         document.getElementById(`assigned-chapter-${passage.book_id}-${passage.chapter}`)
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
-      chapterTabs.append(button);
+
+      const markRead = document.createElement("button");
+      markRead.className = "chapter-read-toggle";
+      markRead.type = "button";
+      markRead.innerHTML = icons.check;
+      markRead.disabled = !available;
+      markRead.setAttribute("aria-pressed", String(isRead));
+      markRead.setAttribute("aria-label", isRead
+        ? `Mark ${passage.amharic} chapter ${passage.chapter} unread`
+        : `Mark ${passage.amharic} chapter ${passage.chapter} read`);
+      markRead.title = isRead ? "Mark unread" : "Mark as read";
+      markRead.addEventListener("click", () => {
+        if (readChapters.includes(key)) readChapters = readChapters.filter((itemKey) => itemKey !== key);
+        else readChapters.push(key);
+        try { localStorage.setItem(readChapterStorageKey, JSON.stringify(readChapters)); } catch { /* Keep progress available for this session. */ }
+        const read = readChapters.includes(key);
+        tab.classList.toggle("is-read", read);
+        markRead.setAttribute("aria-pressed", String(read));
+        markRead.setAttribute("aria-label", read
+          ? `Mark ${passage.amharic} chapter ${passage.chapter} unread`
+          : `Mark ${passage.amharic} chapter ${passage.chapter} read`);
+        markRead.title = read ? "Mark unread" : "Mark as read";
+        updateReadingProgress(passages, dayNumber);
+      });
+      tab.append(select, markRead);
+      chapterTabs.append(tab);
     }
     chapterTabs.hidden = passages.length === 0;
+    updateReadingProgress(passages, dayNumber);
   }
 
   renderBookmarks();
@@ -289,7 +394,15 @@
         return;
       }
       const displayedReading = entry.reading.replace(/(\d)-(\d)/g, "$1–$2");
-      readingDate.textContent = `${entry.ethiopian_date} / ${displayedReading}`;
+      readingDate.replaceChildren();
+      const datePart = document.createElement("span");
+      datePart.textContent = entry.ethiopian_date;
+      const dateDivider = document.createElement("span");
+      dateDivider.className = "date-divider";
+      dateDivider.textContent = "/";
+      const readingPart = document.createElement("span");
+      readingPart.textContent = displayedReading;
+      readingDate.append(datePart, dateDivider, readingPart);
       readingDate.hidden = false;
       dayCount.textContent = `Day ${entry.day} of ${plan.entries.length}`;
       previousDayButton.disabled = entry.day <= plan.entries[0].day;
@@ -326,7 +439,7 @@
         }
         appendChapter(item.passage, item.chapter);
       }
-      renderChapterTabs(tabPassages);
+      renderChapterTabs(tabPassages, entry.day);
       if (missing.length) {
         const warning = document.createElement("p");
         warning.className = "reading-warning";
@@ -354,6 +467,7 @@
     dayNav.hidden = true;
     readingDate.hidden = true;
     chapterTabs.hidden = true;
+    progressFill.style.width = "0%";
     returnReadingButton.hidden = currentDay === null;
     content.replaceChildren();
     content.classList.remove("assigned-reading");
@@ -368,10 +482,12 @@
       };
       const chapter = await loadChapterAsset(passage);
       if (!chapter.complete) {
+        showEmptyChapter();
         setStatus("This chapter has missing source text and cannot be shown as complete.", true);
         return;
       }
       if (!Array.isArray(chapter.verses) || chapter.verses.length === 0) {
+        showEmptyChapter();
         setStatus("No verse text is available for this chapter.", true);
         return;
       }
@@ -379,6 +495,7 @@
       setStatus("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
+      showEmptyChapter();
       setStatus("Could not load this chapter. Please try again.", true);
     } finally {
       openButton.disabled = chapterSelect.disabled;

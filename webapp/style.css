@@ -1,179 +1,129 @@
-@font-face {
-  font-family: "Benaiah";
-  src: url("./fonts/Benaiah.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
 :root {
   color-scheme: dark;
   --page: #050505;
-  --surface: #151515;
-  --surface-raised: #252525;
-  --ink: #eee9df;
-  --muted: #a9a195;
-  --accent: #888888;
-  --accent-strong: #a2a2a2;
-  --button-ink: #111111;
-  --tab-active: #f4f4f3;
-  --tab-active-ink: #151515;
-  --line: #363636;
-  --error: #e3aaa0;
-  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
+  --foreground: #fafafa;
+  --muted: #a1a1a1;
+  --surface: #262626;
+  --border: rgb(255 255 255 / 10%);
+  --primary-bg: #e5e5e5;
+  --primary-fg: #171717;
+  --danger: #a1a1a1;
+  --verse-font-size: 18px;
+  font-family: "Noto Sans Ethiopic", sans-serif;
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --page: #f4f4f3;
-  --surface: #ffffff;
-  --surface-raised: #e9e9e8;
-  --ink: #292929;
-  --muted: #707070;
-  --accent: #858585;
-  --accent-strong: #6e6e6e;
-  --button-ink: #ffffff;
-  --tab-active: #292929;
-  --tab-active-ink: #ffffff;
-  --line: #cfcfcf;
-  --error: #a34f46;
+  --page: #ffffff;
+  --foreground: #0a0a0a;
+  --muted: #737373;
+  --surface: #f5f5f5;
+  --border: #e5e5e5;
+  --primary-bg: #171717;
+  --primary-fg: #fafafa;
+  --danger: #737373;
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
+  min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  color: var(--ink);
+  padding: 0 0 calc(86px + env(safe-area-inset-bottom));
+  color: var(--foreground);
   background: var(--page);
-  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
-  transition: background-color .2s ease, color .2s ease;
+  font-family: "Noto Sans Ethiopic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 150ms ease, color 150ms ease;
 }
+button, select { color: inherit; font: inherit; }
+button { cursor: pointer; transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--muted); outline-offset: 3px; }
 .shell {
-  width: min(100% - 28px, 1200px);
+  width: min(100% - 48px, 640px);
   margin: 0 auto;
-  padding: max(14px, env(safe-area-inset-top)) 0 max(28px, env(safe-area-inset-bottom));
+  padding: max(32px, env(safe-area-inset-top)) 0 20px;
 }
 .topbar {
   position: relative;
   display: flex;
+  min-height: 142px;
   align-items: flex-start;
-  justify-content: space-between;
-  margin: 0 2px;
-  padding: 10px 2px 0;
+  justify-content: center;
 }
 .brand-lockup {
   display: flex;
-  flex-direction: column;
-  max-width: calc(100% - 52px);
   min-width: 0;
-  align-items: flex-start;
-  gap: 7px;
-}
-.brand-logo-wrap {
-  position: relative;
-  flex: 0 0 36px;
-  width: 150px;
-  height: 36px;
-  overflow: hidden;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 .brand-logo {
-  position: absolute;
-  top: -56px;
-  left: 0;
   display: block;
-  width: 150px;
-  height: 150px;
-  object-fit: contain;
-  filter: grayscale(1);
+  width: 112px;
+  height: 31px;
+  flex: 0 0 auto;
+  background: var(--muted);
+  -webkit-mask-image: url("./images/aastu-ecsf-logo.png");
+  mask-image: url("./images/aastu-ecsf-logo.png");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 122px 122px;
+  mask-size: 122px 122px;
+  -webkit-mask-position: center -46px;
+  mask-position: center -46px;
 }
-.brand-copy {
-  min-width: 0;
-}
-.eyebrow {
-  margin: 0 0 2px;
-  color: var(--muted);
-  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
-  font-size: .68rem;
-  font-weight: 500;
-  letter-spacing: .045em;
-}
+.brand-copy { margin-top: 10px; }
 h1 {
   margin: 0;
-  color: var(--ink);
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: clamp(1.4rem, 5vw, 2rem);
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
+  color: var(--foreground);
+  font: 600 24px/1.2 "Noto Serif Ethiopic", serif;
+  letter-spacing: -.02em;
 }
 .theme-toggle {
-  position: relative;
-  top: auto;
-  right: 2px;
+  position: absolute;
+  top: 0;
+  right: 0;
   display: grid;
   width: 40px;
   height: 40px;
   min-height: 40px;
-  aspect-ratio: 1;
   flex: 0 0 40px;
   place-items: center;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--surface);
-  color: var(--ink);
-  font-family: "Manrope", sans-serif;
-  font-size: 1.15rem;
-}
-.theme-toggle:hover { background: var(--surface-raised); }
-.reading-date {
-  max-width: 1100px;
-  margin: 25px 2px 0;
-  padding: 0;
-  color: var(--muted);
-  font: 400 1rem/1.55 "Noto Serif Ethiopic", "Cormorant Garamond", serif;
-  text-align: left;
-}
-.reading-date[hidden], .chapter-tabs[hidden] { display: none; }
-.chapter-tabs {
-  display: flex;
-  width: calc(100% - 4px);
-  max-width: 1100px;
-  gap: 8px;
-  margin: 35px 2px 58px;
-  padding: 0 2px 3px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-.chapter-tabs::-webkit-scrollbar { display: none; }
-.chapter-tab {
-  flex: 1 0 0;
-  min-width: 112px;
-  min-height: 42px;
-  padding: 0 17px;
-  border-radius: 999px;
   background: transparent;
+  color: var(--foreground);
+}
+.theme-toggle:hover { background: var(--surface); }
+.reading-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: center;
+  margin: -24px 0 0;
   color: var(--muted);
-  font: 500 .86rem "Manrope", "Noto Sans Ethiopic", sans-serif;
-  white-space: nowrap;
-}
-.chapter-tab.is-active {
-  border-color: var(--tab-active);
-  background: var(--tab-active);
-  color: var(--tab-active-ink);
-}
-.chapter-tab:hover:not(.is-active) { border-color: var(--accent); color: var(--ink); }
-.reader-card { padding: 4px 8px 18px; }
-.section-kicker { display: none; }
-h2 {
-  margin: 9px 0 20px;
-  color: var(--ink);
-  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
-  font-size: 1.18rem;
-  font-weight: 500;
-  line-height: 1.55;
+  font: 400 14px/1.6 "Noto Sans Ethiopic", sans-serif;
   text-align: center;
 }
+.reading-date[hidden], .chapter-tabs[hidden] { display: none; }
+.reading-date .date-divider { color: var(--border); }
+.chapter-tabs { display: flex; max-width: 520px; gap: 8px; margin: 28px auto 0; padding: 0 0 2px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.chapter-tabs::-webkit-scrollbar { display: none; }
+.chapter-tab { display: flex; min-width: 0; min-height: 44px; flex: 1 0 112px; align-items: center; justify-content: center; gap: 5px; padding: 0 9px; overflow: hidden; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); }
+.chapter-tab.is-active { border-color: var(--primary-bg); background: var(--primary-bg); color: var(--primary-fg); }
+.chapter-tab-select { min-width: 0; min-height: 42px; flex: 1; overflow: hidden; padding: 0; border: 0; background: transparent; color: inherit; font: 500 13px/1.3 "Noto Sans Ethiopic", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.chapter-tab-select:focus-visible, .chapter-read-toggle:focus-visible { outline-offset: -2px; }
+.chapter-read-toggle { display: grid; width: 22px; height: 28px; min-height: 28px; flex: 0 0 22px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); opacity: .45; }
+.chapter-read-toggle svg { width: 15px; height: 15px; }
+.chapter-tab.is-read .chapter-read-toggle { color: inherit; opacity: 1; }
+.reader-card { padding: 0; }
+.section-kicker { display: none; }
+h2 { margin: 9px 0 20px; color: var(--foreground); font: 500 18px/1.55 "Noto Sans Ethiopic", sans-serif; text-align: center; }
 .selectors {
   display: grid;
   grid-template-columns: minmax(70px, .72fr) minmax(0, 1.28fr);
@@ -182,17 +132,14 @@ h2 {
 }
 label {
   color: var(--muted);
-  font-family: "Manrope", "Noto Sans Ethiopic", sans-serif;
-  font-size: 1rem;
-  font-weight: 500;
-  letter-spacing: .025em;
+  font: 500 14px "Noto Sans Ethiopic", sans-serif;
 }
 select, button {
-  min-height: 50px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--ink);
-  font: 500 1.08rem "Manrope", "Noto Sans Ethiopic", sans-serif;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--foreground);
+  font: 500 14px "Noto Sans Ethiopic", sans-serif;
 }
 .select-wrap { position: relative; display: block; width: 100%; }
 .select-wrap::after {
@@ -213,19 +160,15 @@ select {
   appearance: none;
   background: var(--surface);
   cursor: pointer;
-  transition: border-color .15s ease, background-color .15s ease;
 }
 select option {
-  background: var(--surface);
-  color: var(--ink);
-  font: 500 1rem "Manrope", "Noto Sans Ethiopic", sans-serif;
+  background: var(--page);
+  color: var(--foreground);
+  font: 500 14px "Noto Sans Ethiopic", sans-serif;
 }
-select:hover:not(:disabled) { border-color: var(--accent); }
-select:focus-visible, button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.chapter-nav { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 9px; margin-top: 17px; }
+select:hover:not(:disabled) { border-color: var(--muted); }
+.chapter-nav { margin: 12px 0 14px; }
+.chapter-nav .primary-button { width: 100%; min-height: 44px; border-radius: 10px; }
 .day-nav {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -234,7 +177,7 @@ select:focus-visible, button:focus-visible {
   margin: 8px 2px 16px;
 }
 .day-nav[hidden], .return-reading[hidden] { display: none; }
-.day-nav button { min-height: 42px; font-size: .78rem; }
+.day-nav button { min-height: 42px; border-radius: 999px; font-size: 12px; }
 .day-count {
   color: var(--muted);
   font-size: .76rem;
@@ -242,13 +185,13 @@ select:focus-visible, button:focus-visible {
 }
 .browse-bible, .saved-bookmarks {
   margin-top: 24px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .browse-bible summary, .saved-bookmarks summary {
   padding: 15px 4px;
   color: var(--muted);
-  font: 500 .9rem "Manrope", "Noto Sans Ethiopic", sans-serif;
+  font: 500 13px "Noto Sans Ethiopic", sans-serif;
   cursor: pointer;
   list-style: none;
 }
@@ -266,58 +209,59 @@ select:focus-visible, button:focus-visible {
 .browse-bible .chapter-nav { padding: 0 2px 14px; }
 .bookmark-list { padding: 0 4px 12px; }
 .bookmark-empty { margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
-.bookmark-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+.bookmark-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); }
 .bookmark-open {
   flex: 1;
   min-height: 42px;
   border: 0;
   background: transparent;
-  color: var(--ink);
+  color: var(--foreground);
   text-align: left;
 }
 .bookmark-remove { min-height: 36px; color: var(--muted); font-size: .75rem; }
 .verse-bookmark {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
-  min-height: 24px;
-  align-items: center;
-  justify-content: center;
-  margin-inline-start: 3px;
-  padding: 3px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  margin: -4px -3px 0 0;
+  padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  vertical-align: middle;
+  opacity: 0;
+  visibility: hidden;
 }
-.verse-bookmark svg { width: 13px; height: 16px; overflow: visible; }
-.verse-bookmark path { fill: transparent; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
-.verse-bookmark.is-saved { color: var(--accent-strong); }
-.verse-bookmark.is-saved path { fill: currentColor; }
-.verse-bookmark:hover { background: var(--surface-raised); color: var(--ink); }
+.verse-row:hover .verse-bookmark { opacity: .6; visibility: visible; }
+.verse-row.is-selected .verse-bookmark, .verse-row.is-bookmarked .verse-bookmark { opacity: 1; visibility: visible; }
+.verse-bookmark.is-saved { color: var(--foreground); }
+.verse-bookmark.is-saved svg { fill: currentColor; }
+.verse-bookmark:hover { background: var(--border); color: var(--foreground); opacity: 1; }
 .return-reading {
   width: calc(100% - 4px);
   margin: 0 2px 14px;
-  background: var(--surface-raised);
-  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--foreground);
 }
 button {
   padding: 0 10px;
   cursor: pointer;
-  letter-spacing: .01em;
-  transition: border-color .15s ease, color .15s ease, background-color .15s ease;
 }
-button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
+button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .primary-button {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--button-ink);
-  font: 500 .9rem "Manrope", "Noto Sans Ethiopic", sans-serif;
+  border-color: var(--primary-bg);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font: 500 14px "Noto Sans Ethiopic", sans-serif;
 }
-.primary-button:hover:not(:disabled) { border-color: var(--accent-strong); background: var(--accent-strong); }
-.secondary-button { background: var(--surface-raised); color: var(--ink); font-size: .82rem; }
-.secondary-button:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); background: var(--surface-raised); }
+.primary-button:hover:not(:disabled) { opacity: .88; }
+.secondary-button { border: 1px solid var(--border); background: var(--surface); color: var(--foreground); font-size: 12px; }
+.secondary-button:hover:not(:disabled) { border-color: var(--muted); }
 .status {
   min-height: 1.3em;
   margin: 14px 2px 0;
@@ -326,99 +270,124 @@ button:disabled, select:disabled { opacity: .48; cursor: not-allowed; }
   text-align: center;
 }
 .status:empty { display: none; }
-.status.error { color: var(--error); }
-.chapter-content { margin-top: 12px; }
-.chapter-content.assigned-reading { margin-top: 0; }
+.status.error { color: var(--danger); }
+.chapter-content { margin-top: 50px; }
+.chapter-content.assigned-reading { margin-top: 50px; }
 .reading-label {
   margin: 0 2px 8px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border);
   color: var(--muted);
-  font: 400 .9rem/1.7 "Manrope", "Noto Sans Ethiopic", sans-serif;
+  font: 400 14px/1.7 "Noto Sans Ethiopic", sans-serif;
   text-align: center;
 }
 .reading-warning {
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   background: var(--surface);
-  color: var(--error);
-  font-size: .9rem;
+  color: var(--danger);
+  font-size: 13px;
   line-height: 1.55;
 }
 .chapter-section + .chapter-section {
-  margin-top: 30px;
-  padding-top: 23px;
-  border-top: 1px solid var(--line);
+  margin-top: 48px;
+  padding-top: 34px;
+  border-top: 1px solid var(--border);
 }
-.chapter-section { max-width: 900px; margin-right: auto; margin-left: auto; }
+.chapter-section { max-width: 640px; margin: 0 auto; scroll-margin-top: 24px; }
 .chapter-kicker {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   color: var(--muted);
-  font: 500 .65rem "Manrope", sans-serif;
-  letter-spacing: .11em;
+  font: 500 11px/1.5 "Noto Sans Ethiopic", sans-serif;
+  letter-spacing: .2em;
   text-align: center;
   text-transform: uppercase;
 }
 .chapter-title {
   margin: 0;
-  color: var(--ink);
-  font: 400 1.65rem/1.3 "Benaiah", "Noto Sans Ethiopic", "Cormorant Garamond", Georgia, serif;
+  color: var(--foreground);
+  font: 700 32px/1.35 "Noto Serif Ethiopic", serif;
   text-align: center;
 }
 .chapter-ornament {
-  display: block;
-  margin: 5px auto 17px;
-  color: var(--accent);
-  font-size: .7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 14px auto 24px;
+  color: var(--muted);
+  font-size: 10px;
   text-align: center;
 }
-.chapter-text {
-  margin: 0;
-  color: var(--ink);
-  font: 400 1.18rem/1.95 "Noto Serif Ethiopic", Georgia, serif;
-  overflow-wrap: anywhere;
-  text-align: start;
-}
-.verse { white-space: normal; }
+.chapter-ornament::before, .chapter-ornament::after { width: 52px; height: 1px; background: var(--border); content: ""; }
+.chapter-verses { display: grid; gap: 4px; }
+.verse-row { display: flex; align-items: flex-start; gap: 4px; padding: 12px; border-radius: 12px; transition: background-color 150ms ease; }
+.verse-row.is-selected { background: var(--surface); }
+.verse-select { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; }
 .verse-number {
-  margin-inline-end: .12em;
+  padding-top: .35em;
   color: var(--muted);
-  font: 500 .66em "Manrope", sans-serif;
-  vertical-align: super;
+  font: 600 12px/1.6 "Noto Sans Ethiopic", sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
-.verse-text { color: var(--ink); }
-footer {
-  padding: 18px 4px 0;
+.verse-row.is-bookmarked .verse-number { color: var(--foreground); }
+.verse-text { min-width: 0; color: var(--foreground); font: 400 var(--verse-font-size)/1.9 "Noto Serif Ethiopic", serif; text-wrap: pretty; overflow-wrap: anywhere; }
+.chapter-empty { max-width: 440px; margin: 38px auto; color: var(--muted); font: 400 14px/1.7 "Noto Sans Ethiopic", sans-serif; text-align: center; }
+.site-footer {
+  padding: 12px 16px 18px;
   color: var(--muted);
-  font: 400 .68rem "Manrope", sans-serif;
+  font: 400 11px/1.5 "Noto Sans Ethiopic", sans-serif;
   text-align: center;
 }
-footer span { padding: 0 4px; color: var(--accent); }
-@media (max-width: 390px) {
-  .shell { width: min(100% - 20px, 620px); }
-  .brand-logo-wrap { width: 132px; }
-  .brand-logo { width: 132px; height: 132px; top: -49px; }
-  .reader-card { padding: 10px 5px 15px; }
-  .reader-card { padding-top: 4px; }
-  .chapter-nav { grid-template-columns: 1fr 1fr; }
-  .primary-button { grid-column: 1 / -1; grid-row: 1; }
-  .chapter-text { font-size: 1.1rem; line-height: 1.9; }
+.reader-toolbar {
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  padding-bottom: env(safe-area-inset-bottom);
 }
-@media (min-width: 1200px) {
-  .topbar { padding-top: 22px; }
-  .brand-lockup { gap: 38px; }
-  .brand-logo-wrap { flex-basis: 76px; width: 300px; height: 76px; }
-  .brand-logo { top: -112px; width: 300px; height: 300px; }
-  h1 { font-size: clamp(2.6rem, 4vw, 3.8rem); }
-  .theme-toggle { width: 104px; height: 104px; min-height: 104px; flex-basis: 104px; margin-top: 28px; font-size: 2.25rem; }
-  .reading-date { margin-top: 38px; font-size: 2rem; }
-  .chapter-tabs { gap: 20px; margin-top: 62px; margin-bottom: 102px; }
-  .chapter-tab { min-height: 98px; border-radius: 999px; font-size: 2rem; }
-  .chapter-section { max-width: 900px; }
-  .chapter-kicker { margin-bottom: 12px; font-size: 1.8rem; letter-spacing: .18em; }
-  .chapter-title { font-size: 5rem; }
-  .chapter-ornament { margin: 24px auto 35px; font-size: 1.5rem; }
-  .chapter-text { font-size: 1.6rem; line-height: 2; }
+.reading-progress { height: 2px; background: var(--border); }
+.reading-progress span { display: block; width: 0; height: 100%; background: var(--muted); transition: width 150ms ease; }
+.toolbar-inner {
+  display: grid;
+  width: min(100% - 48px, 640px);
+  height: 62px;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin: 0 auto;
+}
+.toolbar-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--foreground);
+}
+.toolbar-icon:first-child { justify-self: start; }
+.toolbar-inner > .toolbar-icon:last-child { justify-self: end; }
+.toolbar-icon:hover:not(:disabled) { background: var(--surface); }
+.theme-toggle svg, .toolbar-icon svg, .verse-bookmark svg, .chapter-read-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.toolbar-icon svg { width: 18px; height: 18px; }
+.font-controls { display: flex; min-height: 42px; align-items: center; gap: 4px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px; }
+.font-controls .toolbar-icon { width: 34px; height: 34px; min-height: 34px; }
+.font-controls span { min-width: 23px; color: var(--muted); font: 500 14px "Noto Sans Ethiopic", sans-serif; text-align: center; }
+@media (max-width: 380px) {
+  .shell { width: min(100% - 36px, 640px); }
+  .chapter-tabs { gap: 6px; }
+  .chapter-tab { flex-basis: 106px; padding: 0 7px; }
+  .chapter-tab-select { font-size: 12px; }
+  .chapter-title { font-size: 28px; }
 }
 
