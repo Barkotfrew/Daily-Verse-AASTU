@@ -100,7 +100,7 @@ h1 {
   margin: 0;
   color: var(--ink);
   font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: clamp(1.15rem, 4.5vw, 1.4rem);
+  font-size: clamp(1.3rem, 5vw, 2rem);
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -132,13 +132,13 @@ h1 {
   margin: 10px auto 0;
   padding: 0 8px;
   color: var(--muted);
-  font: 400 .9rem/1.55 "Manrope", "Noto Sans Ethiopic", sans-serif;
+  font: 400 1rem/1.55 "Manrope", "Noto Sans Ethiopic", sans-serif;
   text-align: center;
 }
 .reading-date[hidden], .chapter-tabs[hidden] { display: none; }
 .chapter-tabs {
   display: flex;
-  max-width: 620px;
+  width: min(calc(100% - 36px), 500px);
   gap: 8px;
   margin: 24px auto 28px;
   padding: 0 2px 3px;
@@ -148,8 +148,7 @@ h1 {
 }
 .chapter-tabs::-webkit-scrollbar { display: none; }
 .chapter-tab {
-  flex: 1 0 auto;
-  min-width: 88px;
+  flex: 0 0 clamp(112px, 30vw, 160px);
   min-height: 42px;
   padding: 0 17px;
   border-radius: 999px;

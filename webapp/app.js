@@ -217,25 +217,32 @@
     return section;
   }
 
+  function shortBookName(amharic) {
+    const parts = amharic.trim().split(/\s+/);
+    const numberedPrefix = /^\d+$/.test(parts[0]) ? `${parts.shift()} ` : "";
+    const firstWord = Array.from(parts[0] ?? "");
+    return `${numberedPrefix}${firstWord.length > 3 ? firstWord.slice(0, 2).join("") : firstWord.join("")}`;
+  }
+
   function renderChapterTabs(passages) {
     chapterTabs.replaceChildren();
-    for (const [index, passage] of passages.entries()) {
+    const activeIndex = passages.findIndex((item) => item.available);
+    for (const [index, item] of passages.entries()) {
+      const { passage, available } = item;
       const button = document.createElement("button");
       button.className = "chapter-tab";
       button.type = "button";
-      button.textContent = `${index === 0 ? "✓ " : ""}${passage.amharic} ${passage.chapter}`;
+      button.textContent = `✓ ${shortBookName(passage.amharic)} ${passage.chapter}`;
       button.setAttribute("aria-label", `Go to ${passage.amharic} chapter ${passage.chapter}`);
-      button.setAttribute("aria-current", index === 0 ? "location" : "false");
-      if (index === 0) button.classList.add("is-active");
+      button.disabled = !available;
+      button.setAttribute("aria-current", index === activeIndex ? "location" : "false");
+      if (index === activeIndex) button.classList.add("is-active");
       button.addEventListener("click", () => {
+        if (!available) return;
         chapterTabs.querySelectorAll(".chapter-tab").forEach((tab) => {
           const active = tab === button;
           tab.classList.toggle("is-active", active);
           tab.setAttribute("aria-current", active ? "location" : "false");
-          const tabPassage = passages.find((item) =>
-            tab.getAttribute("aria-label") === `Go to ${item.amharic} chapter ${item.chapter}`,
-          );
-          if (tabPassage) tab.textContent = `${active ? "✓ " : ""}${tabPassage.amharic} ${tabPassage.chapter}`;
         });
         document.getElementById(`assigned-chapter-${passage.book_id}-${passage.chapter}`)
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -308,16 +315,17 @@
         }
       }));
       const missing = [];
-      const availablePassages = [];
+      const tabPassages = [];
       for (const item of loaded) {
-        if (item.error || !item.chapter || !item.chapter.complete || !item.chapter.verses.length) {
+        const available = !item.error && item.chapter?.complete && Array.isArray(item.chapter.verses) && item.chapter.verses.length > 0;
+        tabPassages.push({ passage: item.passage, available });
+        if (!available) {
           missing.push(`${item.passage.english} ${item.passage.chapter}`);
           continue;
         }
         appendChapter(item.passage, item.chapter);
-        availablePassages.push(item.passage);
       }
-      renderChapterTabs(availablePassages);
+      renderChapterTabs(tabPassages);
       if (missing.length) {
         const warning = document.createElement("p");
         warning.className = "reading-warning";
