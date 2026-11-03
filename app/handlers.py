@@ -25,7 +25,10 @@ from app.database import (
     reminders_enabled,
     register_user,
     set_reminders_enabled,
+    user_is_registered,
 )
+from app.messages import REGISTRATION_REQUIRED
+from app.registration import RegistrationGate
 from app.bible import JsonBibleRepository, format_chapter_messages
 from app.inline_search import parse_chapter_start_parameter, search_inline
 from app.reading_plan import ReadingPlan
@@ -136,6 +139,9 @@ def build_router(
     reminder_time: time = time(hour=7),
 ) -> Router:
     router = Router(name="daily-verse")
+    registration_gate = RegistrationGate(database_path)
+    router.message.outer_middleware(registration_gate)
+    router.callback_query.outer_middleware(registration_gate)
 
     async def send_today(message: Message) -> None:
         today = eat_date()
@@ -197,6 +203,17 @@ def build_router(
 
     @router.inline_query()
     async def bible_inline_search(inline_query: InlineQuery) -> None:
+        if not user_is_registered(database_path, inline_query.from_user.id):
+            await inline_query.answer(
+                [],
+                cache_time=0,
+                is_personal=True,
+                button=InlineQueryResultsButton(
+                    text="Open Daily Verse to register",
+                    start_parameter="register",
+                ),
+            )
+            return
         response = search_inline(inline_query.query, bible)
         results = [
             InlineQueryResultArticle(

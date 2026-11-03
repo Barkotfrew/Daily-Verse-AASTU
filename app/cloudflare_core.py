@@ -46,15 +46,28 @@ def private_message_parts(update: dict[str, Any]) -> tuple[int, int, str] | None
     return user["id"], chat["id"], text
 
 
+def is_start_command(text: str | None) -> bool:
+    """Match /start and its optional Telegram bot name or deep-link payload."""
+    if not text or not text.strip():
+        return False
+    first = text.strip().split(maxsplit=1)[0]
+    return first.split("@", maxsplit=1)[0].lower() == "/start"
+
+
 def supported_command(text: str) -> str | None:
     """Recognize only the first two commands ported to the Worker."""
     first = text.strip().split(maxsplit=1)[0] if text.strip() else ""
     command = first.split("@", maxsplit=1)[0].lower()
-    if command == "/start":
+    if is_start_command(text):
         return "start"
     if command == "/today" or text.strip() == "Today's Reading":
         return "today"
     return None
+
+
+def registration_required(command: str, registered: bool) -> bool:
+    """Require a prior /start registration before serving other commands."""
+    return command != "start" and not registered
 
 
 def format_today_message(entry: dict[str, Any] | None, current_date: date) -> str:

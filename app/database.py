@@ -74,6 +74,16 @@ def register_user(
             )
 
 
+def user_is_registered(database_path: str | Path, telegram_user_id: int) -> bool:
+    """Return whether the user explicitly registered with /start."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT 1 FROM users WHERE telegram_user_id = ?",
+            (telegram_user_id,),
+        ).fetchone()
+    return row is not None
+
+
 def set_reminders_enabled(
     database_path: str | Path, telegram_user_id: int, enabled: bool
 ) -> None:

@@ -6,3 +6,5 @@ DAILY_REMINDER = (
     "{ethiopian_date} · {gregorian_date}\n"
     "{reading}"
 )
+
+REGISTRATION_REQUIRED = "Please send /start first to register before using Daily Verse."

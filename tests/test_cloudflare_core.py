@@ -6,7 +6,9 @@ from app.cloudflare_core import (
     current_eat_date,
     escape_sql_text,
     format_today_message,
+    is_start_command,
     private_message_parts,
+    registration_required,
     reminder_message,
     scheduled_eat_date,
     supported_command,
@@ -37,6 +39,14 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertEqual(supported_command("/today"), "today")
         self.assertEqual(supported_command("Today's Reading"), "today")
         self.assertIsNone(supported_command("/plan"))
+        self.assertTrue(is_start_command("/start@ExampleBot register"))
+        self.assertFalse(is_start_command("/today"))
+        self.assertFalse(is_start_command(None))
+
+    def test_start_is_registration_and_other_commands_require_it_first(self) -> None:
+        self.assertFalse(registration_required("start", False))
+        self.assertFalse(registration_required("today", True))
+        self.assertTrue(registration_required("today", False))
 
     def test_today_message_uses_exact_entry_or_reports_no_entry(self) -> None:
         from datetime import date

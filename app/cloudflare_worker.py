@@ -16,9 +16,11 @@ from cloudflare_core import (
     current_eat_date,
     format_today_message,
     private_message_parts,
+    registration_required,
     supported_command,
     verify_webhook_secret,
 )
+from messages import REGISTRATION_REQUIRED
 
 MAIN_MENU = {
     "keyboard": [
@@ -31,7 +33,7 @@ MAIN_MENU = {
 
 WELCOME = (
     "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-    "Welcome to Daily Verse. Choose an option below."
+    "You're registered. Welcome to Daily Verse. Choose an option below."
 )
 
 
@@ -67,17 +69,29 @@ class Default(WorkerEntrypoint):
             if command is None:
                 return Response("Command not migrated", status=503)
 
-            # Registration is keyed only by Telegram user ID; the shared plan
-            # date is never derived from a user's registration date.
-            await self.env.DB.prepare(
-                "INSERT INTO users (telegram_user_id, private_chat_id) VALUES (?, ?) "
-                "ON CONFLICT(telegram_user_id) DO UPDATE "
-                "SET private_chat_id = excluded.private_chat_id"
-            ).bind(user_id, chat_id).run()
-
             if command == "start":
+                # Registration is keyed only by Telegram user ID; the shared
+                # plan date is never derived from a user's registration date.
+                await self.env.DB.prepare(
+                    "INSERT INTO users (telegram_user_id, private_chat_id) VALUES (?, ?) "
+                    "ON CONFLICT(telegram_user_id) DO UPDATE "
+                    "SET private_chat_id = excluded.private_chat_id"
+                ).bind(user_id, chat_id).run()
                 await self._send_message(chat_id, WELCOME, MAIN_MENU)
             else:
+                user = await self.env.DB.prepare(
+                    "SELECT telegram_user_id FROM users WHERE telegram_user_id = ?"
+                ).bind(user_id).first()
+                if registration_required(command, user is not None):
+                    await self._send_message(chat_id, REGISTRATION_REQUIRED)
+                    return Response("OK")
+
+                # Refresh only the private chat destination for a registered
+                # user. This does not create an account or change preferences.
+                await self.env.DB.prepare(
+                    "UPDATE users SET private_chat_id = ? WHERE telegram_user_id = ?"
+                ).bind(chat_id, user_id).run()
+
                 current_date = current_eat_date()
                 today = current_date.isoformat()
                 entry = await self.env.DB.prepare(

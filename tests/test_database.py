@@ -16,6 +16,7 @@ from app.database import (
     reminders_enabled,
     register_user,
     set_reminders_enabled,
+    user_is_registered,
 )
 
 
@@ -41,7 +42,9 @@ class DatabaseInitializationTests(unittest.TestCase):
             database_path = Path(directory) / "daily.sqlite3"
             initialize_database(database_path)
 
+            self.assertFalse(user_is_registered(database_path, 10))
             register_user(database_path, 10)
+            self.assertTrue(user_is_registered(database_path, 10))
             register_user(database_path, 10)
             self.assertTrue(mark_read(database_path, 10, 17))
             self.assertFalse(mark_read(database_path, 10, 17))
