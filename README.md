@@ -89,4 +89,23 @@ python -m http.server 8000 --directory webapp/dist
 
 Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare deploys, set `MINI_APP_URL=https://daily-verse-aastu.pages.dev` in the bot host's environment and restart the bot. The Bible text and Mini App are public; verify text redistribution rights before public release.
 
-Next milestone: verify the chosen bot host's persistent SQLite storage and 7:00 AM EAT scheduler behavior, then enable `REMINDER_SCHEDULER_ENABLED`. English Bible text still requires a separately licensed source.
+## Cloudflare Worker migration (in progress)
+
+Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. Do not point the Telegram webhook at the Worker yet. The Worker currently exposes a health check and returns HTTP 503 for authenticated Telegram updates until the bot's commands, callbacks, inline search, progress, and reminder handlers are ported. That response prevents Telegram from treating unprocessed updates as delivered.
+
+The D1 schema is in `cloudflare/worker/migrations/0001_schema.sql`. The canonical reading plan is exported to `cloudflare/worker/seed/0002_reading_plan.sql`; regenerate it after an approved plan change with:
+
+```powershell
+python scripts/export_d1_reading_plan.py
+```
+
+Cloudflare's Python Worker toolchain uses `uv` and `pywrangler`. Once the Worker migration is ready to run locally, install uv and sync its isolated tool dependencies:
+
+```powershell
+winget install --id=astral-sh.uv -e
+uv sync --dev
+```
+
+Before a future test deployment, create the D1 database and queue in Cloudflare, replace the placeholder D1 ID in `wrangler.toml`, migrate the schema, import the plan, set the Telegram token and webhook secret as Worker secrets, and verify every bot flow. Do not enable scheduled triggers until reminder delivery is implemented and tested in the deployed runtime. The Worker runtime uses Python through Pyodide; verify package compatibility before choosing Python dependencies.
+
+English Bible text still requires a separately licensed source.

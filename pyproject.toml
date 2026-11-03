@@ -1,0 +1,9 @@
+[project]
+name = "daily-verse-aastu-worker"
+version = "0.1.0"
+description = "Cloudflare webhook and scheduled backend for Daily Verse"
+requires-python = ">=3.13"
+dependencies = ["workers-runtime-sdk"]
+
+[dependency-groups]
+dev = ["workers-py"]
