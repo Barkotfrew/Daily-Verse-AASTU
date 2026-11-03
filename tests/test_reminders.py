@@ -1,6 +1,6 @@
 """Tests for scheduled reminder timing and idempotent sends."""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,6 +49,33 @@ class ReminderDeliveryTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual((before_time, outside_plan), (0, 0))
             bot.send_message.assert_not_awaited()
+
+    async def test_custom_test_time_can_be_set_to_eight_nineteen_eat(self) -> None:
+        entry = ReadingEntry(1, "ጥቅምት 1", "ዘፍጥረት 1-3", date(2026, 10, 11))
+        plan = ReadingPlan("Test plan", (entry,))
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "daily.sqlite3"
+            initialize_database(database_path)
+            register_user(database_path, 22, private_chat_id=22)
+            bot = AsyncMock()
+
+            early = await deliver_due_reminders(
+                bot,
+                database_path,
+                plan,
+                now=datetime(2026, 10, 11, 8, 18, tzinfo=EAT),
+                reminder_time=time(8, 19),
+            )
+            at_trigger = await deliver_due_reminders(
+                bot,
+                database_path,
+                plan,
+                now=datetime(2026, 10, 11, 8, 19, tzinfo=EAT),
+                reminder_time=time(8, 19),
+            )
+
+            self.assertEqual((early, at_trigger), (0, 1))
+            bot.send_message.assert_awaited_once()
 
     def test_template_contains_only_fixed_plan_fields_and_approved_greeting(self) -> None:
         entry = ReadingEntry(1, "ጥቅምት 1", "ዘፍጥረት 1-3", date(2026, 10, 11))

@@ -62,13 +62,14 @@ async def deliver_due_reminders(
     plan: ReadingPlan,
     mini_app_url: str = "",
     now: datetime | None = None,
+    reminder_time: time = REMINDER_TIME,
 ) -> int:
     """Deliver due messages for the current shared date and return success count."""
     instant = now or datetime.now(EAT)
     if instant.tzinfo is None:
         raise ValueError("now must include a timezone")
     local_now = instant.astimezone(EAT)
-    if local_now.time().replace(tzinfo=None) < REMINDER_TIME:
+    if local_now.time().replace(tzinfo=None) < reminder_time:
         return 0
     entry = entry_for_date(plan, local_now.date())
     if entry is None:
@@ -115,11 +116,14 @@ async def run_reminder_scheduler(
     database_path: str | Path,
     plan: ReadingPlan,
     mini_app_url: str = "",
+    reminder_time: time = REMINDER_TIME,
 ) -> None:
     """Check every 30 seconds; persistent delivery rows prevent restart duplicates."""
     while True:
         try:
-            await deliver_due_reminders(bot, database_path, plan, mini_app_url)
+            await deliver_due_reminders(
+                bot, database_path, plan, mini_app_url, reminder_time=reminder_time
+            )
         except asyncio.CancelledError:
             raise
         except Exception:

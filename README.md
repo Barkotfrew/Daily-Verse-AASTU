@@ -58,7 +58,7 @@ python -m unittest discover -s tests -v
 - A static Telegram Mini App reader is built for GitHub Pages and loads only the selected chapter asset.
 - Daily reminders use a fixed Amharic template, the shared plan date, and individual private-chat opt-in state. The scheduler checks at 7:00 AM EAT and records one delivery per user/date to avoid resending completed deliveries after restarts.
 - Reminder sends are batched at up to 20 per second, retried up to five attempts with backoff, and isolated so a failed recipient does not interrupt other deliveries. Telegram-forbidden private chats are opted out automatically.
-- Set `REMINDER_SCHEDULER_ENABLED=true` only after verifying that the deployment runs continuously at 7:00 AM EAT and its SQLite file survives process restarts/redeploys. It defaults to `false`; `/settings` reports whether delivery is paused or active. Reminders continue after a reading is marked complete, and users can turn them off individually.
+- Set `REMINDER_SCHEDULER_ENABLED=true` only after verifying that the deployment runs continuously at the configured time and its SQLite file survives process restarts/redeploys. `REMINDER_TIME` uses 24-hour EAT (`07:00` by default); it defaults to a disabled scheduler, and `/settings` reports whether delivery is paused or active. Reminders continue after a reading is marked complete, and users can turn them off individually.
 
 ## Bible data source review
 

@@ -1,6 +1,7 @@
 """Telegram commands, menu buttons, and per-user callbacks."""
 
 from pathlib import Path
+from datetime import time
 from urllib.parse import urlencode
 
 from aiogram import F, Router
@@ -132,6 +133,7 @@ def build_router(
     bible: JsonBibleRepository | None = None,
     mini_app_url: str = "",
     reminder_scheduler_enabled: bool = False,
+    reminder_time: time = time(hour=7),
 ) -> Router:
     router = Router(name="daily-verse")
 
@@ -391,7 +393,7 @@ def build_router(
         )
         status = "on" if enabled else "off"
         delivery_note = (
-            "Reminders are sent at 7:00 AM EAT, including on days you have marked as read."
+            f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )
@@ -414,7 +416,7 @@ def build_router(
             label = "Turn reminders off" if enabled else "Turn reminders on"
             status = "on" if enabled else "off"
             delivery_note = (
-                "Reminders are sent at 7:00 AM EAT, including on days you have marked as read."
+                f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
                 if reminder_scheduler_enabled
                 else "Delivery is paused until the hosting scheduler is verified and enabled."
             )

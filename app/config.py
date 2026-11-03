@@ -1,6 +1,7 @@
 """Environment-backed application configuration."""
 
 from dataclasses import dataclass
+from datetime import time
 import os
 from pathlib import Path
 
@@ -13,6 +14,7 @@ class Settings:
     database_path: Path
     mini_app_url: str = ""
     reminder_scheduler_enabled: bool = False
+    reminder_time: time = time(hour=7)
 
 
 def load_settings() -> Settings:
@@ -26,6 +28,12 @@ def load_settings() -> Settings:
             key, value = line.split("=", 1)
             os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
     mini_app_url = os.getenv("MINI_APP_URL", "").strip().rstrip("/")
+    reminder_time_text = os.getenv("REMINDER_TIME", "07:00").strip()
+    try:
+        reminder_hour, reminder_minute = (int(part) for part in reminder_time_text.split(":"))
+        reminder_time = time(hour=reminder_hour, minute=reminder_minute)
+    except (ValueError, TypeError) as error:
+        raise ValueError("REMINDER_TIME must use 24-hour HH:MM format, for example 07:00") from error
     if mini_app_url:
         from urllib.parse import urlsplit
 
@@ -38,4 +46,5 @@ def load_settings() -> Settings:
         mini_app_url=mini_app_url,
         reminder_scheduler_enabled=os.getenv("REMINDER_SCHEDULER_ENABLED", "false").strip().lower()
         in {"1", "true", "yes", "on"},
+        reminder_time=reminder_time,
     )
