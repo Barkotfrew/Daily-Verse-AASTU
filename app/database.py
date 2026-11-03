@@ -4,6 +4,8 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+from app.cloudflare_core import normalize_display_name
+
 
 def initialize_database(database_path: str | Path) -> None:
     """Create user and per-user completion tables; safe to repeat."""
@@ -18,6 +20,7 @@ def initialize_database(database_path: str | Path) -> None:
                     telegram_user_id INTEGER PRIMARY KEY,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     private_chat_id INTEGER,
+                    display_name TEXT,
                     reminders_enabled INTEGER NOT NULL DEFAULT 1
                         CHECK (reminders_enabled IN (0, 1))
                 )
@@ -26,6 +29,8 @@ def initialize_database(database_path: str | Path) -> None:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
             if "private_chat_id" not in columns:
                 connection.execute("ALTER TABLE users ADD COLUMN private_chat_id INTEGER")
+            if "display_name" not in columns:
+                connection.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS reading_completions (
@@ -80,13 +85,49 @@ def register_user(
 
 
 def user_is_registered(database_path: str | Path, telegram_user_id: int) -> bool:
-    """Return whether the user explicitly registered with /start."""
+    """Return whether the user completed signup by choosing a display name."""
     with closing(sqlite3.connect(database_path)) as connection:
         row = connection.execute(
-            "SELECT 1 FROM users WHERE telegram_user_id = ?",
+            "SELECT 1 FROM users WHERE telegram_user_id = ? "
+            "AND display_name IS NOT NULL AND trim(display_name) != ''",
             (telegram_user_id,),
         ).fetchone()
     return row is not None
+
+
+def user_has_account(database_path: str | Path, telegram_user_id: int) -> bool:
+    """Return whether /start has created an account, even if signup is pending."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT 1 FROM users WHERE telegram_user_id = ?", (telegram_user_id,)
+        ).fetchone()
+    return row is not None
+
+
+def display_name(database_path: str | Path, telegram_user_id: int) -> str | None:
+    """Return the user's chosen display name, if signup is complete."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT display_name FROM users WHERE telegram_user_id = ?",
+            (telegram_user_id,),
+        ).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def save_display_name(
+    database_path: str | Path, telegram_user_id: int, name: str
+) -> bool:
+    """Save a validated name for an account created through /start."""
+    cleaned = normalize_display_name(name)
+    if cleaned is None:
+        return False
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            cursor = connection.execute(
+                "UPDATE users SET display_name = ? WHERE telegram_user_id = ?",
+                (cleaned, telegram_user_id),
+            )
+    return cursor.rowcount == 1
 
 
 def delete_user(database_path: str | Path, telegram_user_id: int) -> bool:
@@ -166,7 +207,8 @@ def prepare_reminder_deliveries(database_path: str | Path, reminder_date: str, p
                 """INSERT OR IGNORE INTO reminder_deliveries
                    (reminder_date, telegram_user_id, plan_day)
                    SELECT ?, telegram_user_id, ? FROM users
-                   WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL""",
+                   WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL
+                     AND display_name IS NOT NULL AND trim(display_name) != ''""",
                 (reminder_date, plan_day),
             )
 

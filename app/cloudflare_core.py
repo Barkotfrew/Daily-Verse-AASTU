@@ -54,6 +54,16 @@ def is_start_command(text: str | None) -> bool:
     return first.split("@", maxsplit=1)[0].lower() == "/start"
 
 
+def normalize_display_name(text: str | None) -> str | None:
+    """Clean a signup name and reject commands or unusably short/long values."""
+    if not isinstance(text, str):
+        return None
+    value = " ".join(text.split())
+    if not 2 <= len(value) <= 32 or value.startswith("/"):
+        return None
+    return value
+
+
 def supported_command(text: str) -> str | None:
     """Recognize only the first two commands ported to the Worker."""
     first = text.strip().split(maxsplit=1)[0] if text.strip() else ""

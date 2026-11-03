@@ -17,11 +17,12 @@ from aiogram.types import (
     InputTextMessageContent,
     WebAppInfo,
 )
-from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import Message
 
 from app.database import (
     completed_days,
     delete_user,
+    display_name,
     mark_read,
     reminders_enabled,
     register_user,
@@ -34,8 +35,9 @@ from app.messages import (
     DELETE_ACCOUNT_PROMPT,
     REGISTRATION_COMPLETE,
     REGISTRATION_EXISTING,
-    REGISTRATION_REQUIRED,
+    REGISTRATION_NAME_PROMPT,
 )
+from app.keyboards import MAIN_MENU
 from app.registration import RegistrationGate
 from app.bible import JsonBibleRepository, format_chapter_messages
 from app.inline_search import parse_chapter_start_parameter, search_inline
@@ -50,16 +52,6 @@ from app.readings import (
     page_for_day,
     plan_page_count,
 )
-
-MAIN_MENU = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Today's Reading"), KeyboardButton(text="Reading Plan")],
-        [KeyboardButton(text="My Progress"), KeyboardButton(text="Settings")],
-        [KeyboardButton(text="Help")],
-    ],
-    resize_keyboard=True,
-)
-
 
 async def _answer_callback(callback: CallbackQuery, *args: object, **kwargs: object) -> None:
     """Acknowledge a button tap, ignoring callbacks Telegram has already expired."""
@@ -181,10 +173,15 @@ def build_router(
 
     @router.message(Command("start"))
     async def start(message: Message, command: CommandObject) -> None:
-        is_new_user = False
-        if message.from_user is not None:
-            private_chat_id = message.chat.id if message.chat.type == "private" else None
-            is_new_user = register_user(database_path, message.from_user.id, private_chat_id)
+        if message.chat.type != "private":
+            await message.answer("Please open Daily Verse in a private chat to register.")
+            return
+        if message.from_user is None:
+            return
+        is_new_user = register_user(database_path, message.from_user.id, message.chat.id)
+        if not user_is_registered(database_path, message.from_user.id):
+            await message.answer(REGISTRATION_NAME_PROMPT)
+            return
         chapter_reference = parse_chapter_start_parameter(command.args)
         if chapter_reference is not None:
             book_id, chapter_number = chapter_reference
@@ -205,7 +202,11 @@ def build_router(
                 await message.answer(text)
             return
         await message.answer(
-            REGISTRATION_COMPLETE if is_new_user else REGISTRATION_EXISTING,
+            REGISTRATION_COMPLETE
+            if is_new_user
+            else REGISTRATION_EXISTING.format(
+                name=display_name(database_path, message.from_user.id) or "friend"
+            ),
             reply_markup=MAIN_MENU,
         )
 

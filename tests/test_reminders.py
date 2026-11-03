@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from app.database import initialize_database, register_user
+from app.database import initialize_database, register_user, save_display_name
 from app.reading_plan import ReadingEntry, ReadingPlan
 from app.readings import EAT
 from app.services.reminders import deliver_due_reminders, reminder_text
@@ -21,6 +21,7 @@ class ReminderDeliveryTests(unittest.IsolatedAsyncioTestCase):
             database_path = Path(directory) / "daily.sqlite3"
             initialize_database(database_path)
             register_user(database_path, 22, private_chat_id=22)
+            save_display_name(database_path, 22, "Reader")
             bot = AsyncMock()
 
             first = await deliver_due_reminders(bot, database_path, plan, now=now)
@@ -38,6 +39,7 @@ class ReminderDeliveryTests(unittest.IsolatedAsyncioTestCase):
             database_path = Path(directory) / "daily.sqlite3"
             initialize_database(database_path)
             register_user(database_path, 22, private_chat_id=22)
+            save_display_name(database_path, 22, "Reader")
             bot = AsyncMock()
 
             before_time = await deliver_due_reminders(
@@ -57,6 +59,7 @@ class ReminderDeliveryTests(unittest.IsolatedAsyncioTestCase):
             database_path = Path(directory) / "daily.sqlite3"
             initialize_database(database_path)
             register_user(database_path, 22, private_chat_id=22)
+            save_display_name(database_path, 22, "Reader")
             bot = AsyncMock()
 
             early = await deliver_due_reminders(

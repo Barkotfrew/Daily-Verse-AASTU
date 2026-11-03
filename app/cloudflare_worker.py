@@ -15,12 +15,19 @@ from pyodide.ffi import to_js
 from cloudflare_core import (
     current_eat_date,
     format_today_message,
+    normalize_display_name,
     private_message_parts,
     registration_required,
     supported_command,
     verify_webhook_secret,
 )
 from messages import REGISTRATION_COMPLETE, REGISTRATION_EXISTING, REGISTRATION_REQUIRED
+
+REGISTRATION_NAME_PROMPT = (
+    "What name or username should we show for you?\n"
+    "A nickname is fine. It may appear on a future reading leaderboard."
+)
+REGISTRATION_NAME_INVALID = "Please send a name or nickname between 2 and 32 characters."
 
 
 MAIN_MENU = {
@@ -63,29 +70,51 @@ class Default(WorkerEntrypoint):
             user_id, chat_id, text = parts
             command = supported_command(text)
             if command is None:
-                return Response("Command not migrated", status=503)
+                user = await self.env.DB.prepare(
+                    "SELECT display_name FROM users WHERE telegram_user_id = ?"
+                ).bind(user_id).first()
+                if user is None or user["display_name"]:
+                    return Response("Command not migrated", status=503)
+                name = normalize_display_name(text)
+                if name is None:
+                    await self._send_message(chat_id, REGISTRATION_NAME_INVALID)
+                else:
+                    await self.env.DB.prepare(
+                        "UPDATE users SET display_name = ?, private_chat_id = ? "
+                        "WHERE telegram_user_id = ? AND display_name IS NULL"
+                    ).bind(name, chat_id, user_id).run()
+                    await self._send_message(chat_id, REGISTRATION_COMPLETE, MAIN_MENU)
+                return Response("OK")
 
             if command == "start":
                 # Registration is keyed only by Telegram user ID; the shared
                 # plan date is never derived from a user's registration date.
                 existing_user = await self.env.DB.prepare(
-                    "SELECT telegram_user_id FROM users WHERE telegram_user_id = ?"
+                    "SELECT display_name FROM users WHERE telegram_user_id = ?"
                 ).bind(user_id).first()
                 await self.env.DB.prepare(
                     "INSERT INTO users (telegram_user_id, private_chat_id) VALUES (?, ?) "
                     "ON CONFLICT(telegram_user_id) DO UPDATE "
                     "SET private_chat_id = excluded.private_chat_id"
                 ).bind(user_id, chat_id).run()
-                start_message = REGISTRATION_EXISTING
-                if existing_user is None:
-                    start_message = REGISTRATION_COMPLETE
-                await self._send_message(chat_id, start_message, MAIN_MENU)
+                if existing_user is None or not existing_user["display_name"]:
+                    await self._send_message(chat_id, REGISTRATION_NAME_PROMPT)
+                else:
+                    await self._send_message(
+                        chat_id,
+                        REGISTRATION_EXISTING.format(name=existing_user["display_name"]),
+                        MAIN_MENU,
+                    )
             else:
                 user = await self.env.DB.prepare(
-                    "SELECT telegram_user_id FROM users WHERE telegram_user_id = ?"
+                    "SELECT display_name FROM users WHERE telegram_user_id = ?"
                 ).bind(user_id).first()
-                if registration_required(command, user is not None):
-                    await self._send_message(chat_id, REGISTRATION_REQUIRED)
+                registered = bool(user and user["display_name"])
+                if registration_required(command, registered):
+                    if user is not None:
+                        await self._send_message(chat_id, REGISTRATION_NAME_PROMPT)
+                    else:
+                        await self._send_message(chat_id, REGISTRATION_REQUIRED)
                     return Response("OK")
 
                 # Refresh only the private chat destination for a registered

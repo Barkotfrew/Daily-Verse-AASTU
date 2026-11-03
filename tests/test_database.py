@@ -9,6 +9,7 @@ from pathlib import Path
 from app.database import (
     completed_days,
     delete_user,
+    display_name,
     due_reminder_deliveries,
     initialize_database,
     mark_reminder_sent,
@@ -16,6 +17,7 @@ from app.database import (
     prepare_reminder_deliveries,
     reminders_enabled,
     register_user,
+    save_display_name,
     set_reminders_enabled,
     user_is_registered,
 )
@@ -36,7 +38,24 @@ class DatabaseInitializationTests(unittest.TestCase):
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
 
             self.assertEqual(table, ("users",))
-            self.assertTrue({"telegram_user_id", "created_at", "reminders_enabled"} <= columns)
+            self.assertTrue(
+                {"telegram_user_id", "created_at", "reminders_enabled", "display_name"} <= columns
+            )
+
+    def test_initialization_migrates_an_existing_users_table(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "old.sqlite3"
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute(
+                    "CREATE TABLE users (telegram_user_id INTEGER PRIMARY KEY, "
+                    "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    "private_chat_id INTEGER, reminders_enabled INTEGER NOT NULL DEFAULT 1)"
+                )
+            initialize_database(database_path)
+            initialize_database(database_path)
+            with closing(sqlite3.connect(database_path)) as connection:
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
+            self.assertIn("display_name", columns)
 
     def test_registration_completion_and_reminder_settings_are_per_user(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -45,6 +64,9 @@ class DatabaseInitializationTests(unittest.TestCase):
 
             self.assertFalse(user_is_registered(database_path, 10))
             self.assertTrue(register_user(database_path, 10))
+            self.assertFalse(user_is_registered(database_path, 10))
+            self.assertTrue(save_display_name(database_path, 10, "  ባርኮ  ፍሬው "))
+            self.assertEqual(display_name(database_path, 10), "ባርኮ ፍሬው")
             self.assertTrue(user_is_registered(database_path, 10))
             self.assertFalse(register_user(database_path, 10))
             self.assertTrue(mark_read(database_path, 10, 17))
@@ -62,6 +84,8 @@ class DatabaseInitializationTests(unittest.TestCase):
             initialize_database(database_path)
             register_user(database_path, 10, 1010)
             register_user(database_path, 11, 1011)
+            save_display_name(database_path, 10, "First reader")
+            save_display_name(database_path, 11, "Second reader")
             mark_read(database_path, 10, 17)
             mark_read(database_path, 11, 18)
             set_reminders_enabled(database_path, 10, False)
@@ -78,7 +102,9 @@ class DatabaseInitializationTests(unittest.TestCase):
             database_path = Path(directory) / "daily.sqlite3"
             initialize_database(database_path)
             register_user(database_path, 10, private_chat_id=1010)
+            save_display_name(database_path, 10, "Reader")
             register_user(database_path, 11)
+            register_user(database_path, 12, private_chat_id=1012)
             set_reminders_enabled(database_path, 12, False)
 
             prepare_reminder_deliveries(database_path, "2026-10-11", 1)

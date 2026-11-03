@@ -4,6 +4,7 @@ import unittest
 
 from app.cloudflare_core import (
     current_eat_date,
+    normalize_display_name,
     escape_sql_text,
     format_today_message,
     is_start_command,
@@ -17,6 +18,14 @@ from app.cloudflare_core import (
 
 
 class CloudflareCoreTests(unittest.TestCase):
+    def test_signup_name_is_trimmed_and_validated(self) -> None:
+        self.assertEqual(normalize_display_name("  ባርኮ   ፍሬው "), "ባርኮ ፍሬው")
+        self.assertEqual(normalize_display_name("Barki"), "Barki")
+        self.assertIsNone(normalize_display_name("/today"))
+        self.assertIsNone(normalize_display_name(" "))
+        self.assertIsNone(normalize_display_name("x"))
+        self.assertIsNone(normalize_display_name("A" * 33))
+
     def test_webhook_secret_requires_both_values_and_matches_exactly(self) -> None:
         self.assertTrue(verify_webhook_secret("secret", "secret"))
         self.assertFalse(verify_webhook_secret("secret", "Secret"))

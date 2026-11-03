@@ -38,7 +38,7 @@ Set `BOT_TOKEN` in `.env`, then run:
 python -m app.main
 ```
 
-The bot uses long polling and needs the process to stay running. A user's first `/start` registers their Telegram ID and private chat; they must do that before using commands, menu buttons, callbacks, or inline search. No name, phone number, or other profile details are collected. Settings lets each user manage reminders and request account deletion; deletion requires confirmation and removes only that user's progress and reminder records. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
+The bot uses long polling and needs the process to stay running. A user's first `/start` creates a pending account and asks for a display name or nickname (2–32 characters); the menu and bot features unlock after the name is saved. This name is collected for a possible future leaderboard, but no leaderboard is currently shown and reading progress remains private. Settings lets each user manage reminders and request account deletion; deletion requires confirmation and removes only that user's profile, progress, and reminder records. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
 
 ## Run checks
 
@@ -91,7 +91,7 @@ Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare 
 
 ## Cloudflare Worker migration (in progress)
 
-Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. On the Worker, a private `/start` creates or refreshes the user's D1 registration and then shows the main menu. `/today` requires that registration; it will ask an unregistered user to send `/start` first instead of silently creating their account. The Worker then looks up the shared-plan entry for today's EAT date. It returns HTTP 503 for update types and commands that have not been ported yet. Do not point Telegram's production webhook at the Worker until commands, callbacks, inline search, progress, and reminder handlers are all migrated and tested.
+Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. The Worker remains an incomplete migration and is not the active bot backend. Do not point Telegram's production webhook at the Worker until signup, commands, callbacks, inline search, progress, and reminder handlers are all migrated and tested.
 
 The D1 schema is in `cloudflare/worker/migrations/0001_schema.sql`. The canonical reading plan is exported to `cloudflare/worker/seed/0002_reading_plan.sql`; regenerate it after an approved plan change with:
 

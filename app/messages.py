@@ -7,16 +7,21 @@ DAILY_REMINDER = (
     "{reading}"
 )
 
-REGISTRATION_REQUIRED = "Please send /start first to register before using Daily Verse."
+REGISTRATION_REQUIRED = "Please send /start first to create your account."
+
+REGISTRATION_NAME_PROMPT = (
+    "What name or username should we show for you?\n"
+    "A nickname is fine. It may appear on a future reading leaderboard."
+)
+
+REGISTRATION_NAME_INVALID = "Please send a name or nickname between 2 and 32 characters."
 
 REGISTRATION_COMPLETE = (
-    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-    "You're registered. Welcome to Daily Verse. Choose an option below."
+    "Your name is saved. Welcome to Daily Verse. Choose an option below."
 )
 
 REGISTRATION_EXISTING = (
-    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-    "You're already registered. Choose an option below."
+    "Welcome back, {name}. Choose an option below."
 )
 
 DELETE_ACCOUNT_PROMPT = (
