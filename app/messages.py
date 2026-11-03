@@ -8,3 +8,13 @@ DAILY_REMINDER = (
 )
 
 REGISTRATION_REQUIRED = "Please send /start first to register before using Daily Verse."
+
+REGISTRATION_COMPLETE = (
+    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
+    "You're registered. Welcome to Daily Verse. Choose an option below."
+)
+
+REGISTRATION_EXISTING = (
+    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
+    "You're already registered. Choose an option below."
+)

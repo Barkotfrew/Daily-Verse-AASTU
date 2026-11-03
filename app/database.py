@@ -62,16 +62,21 @@ def register_user(
     database_path: str | Path,
     telegram_user_id: int,
     private_chat_id: int | None = None,
-) -> None:
-    """Create a user once without resetting existing preferences or progress."""
+) -> bool:
+    """Register once, refresh the private chat, and return whether it was new."""
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
-            connection.execute(
-                """INSERT INTO users (telegram_user_id, private_chat_id) VALUES (?, ?)
-                   ON CONFLICT (telegram_user_id) DO UPDATE SET
-                       private_chat_id = COALESCE(excluded.private_chat_id, users.private_chat_id)""",
+            cursor = connection.execute(
+                "INSERT OR IGNORE INTO users (telegram_user_id, private_chat_id) VALUES (?, ?)",
                 (telegram_user_id, private_chat_id),
             )
+            is_new_user = cursor.rowcount == 1
+            if not is_new_user and private_chat_id is not None:
+                connection.execute(
+                    "UPDATE users SET private_chat_id = ? WHERE telegram_user_id = ?",
+                    (private_chat_id, telegram_user_id),
+                )
+    return is_new_user
 
 
 def user_is_registered(database_path: str | Path, telegram_user_id: int) -> bool:

@@ -27,7 +27,7 @@ from app.database import (
     set_reminders_enabled,
     user_is_registered,
 )
-from app.messages import REGISTRATION_REQUIRED
+from app.messages import REGISTRATION_COMPLETE, REGISTRATION_EXISTING, REGISTRATION_REQUIRED
 from app.registration import RegistrationGate
 from app.bible import JsonBibleRepository, format_chapter_messages
 from app.inline_search import parse_chapter_start_parameter, search_inline
@@ -173,9 +173,10 @@ def build_router(
 
     @router.message(Command("start"))
     async def start(message: Message, command: CommandObject) -> None:
+        is_new_user = False
         if message.from_user is not None:
             private_chat_id = message.chat.id if message.chat.type == "private" else None
-            register_user(database_path, message.from_user.id, private_chat_id)
+            is_new_user = register_user(database_path, message.from_user.id, private_chat_id)
         chapter_reference = parse_chapter_start_parameter(command.args)
         if chapter_reference is not None:
             book_id, chapter_number = chapter_reference
@@ -196,8 +197,7 @@ def build_router(
                 await message.answer(text)
             return
         await message.answer(
-            "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-            "Welcome to Daily Verse. Choose an option below.",
+            REGISTRATION_COMPLETE if is_new_user else REGISTRATION_EXISTING,
             reply_markup=MAIN_MENU,
         )
 

@@ -43,9 +43,9 @@ class DatabaseInitializationTests(unittest.TestCase):
             initialize_database(database_path)
 
             self.assertFalse(user_is_registered(database_path, 10))
-            register_user(database_path, 10)
+            self.assertTrue(register_user(database_path, 10))
             self.assertTrue(user_is_registered(database_path, 10))
-            register_user(database_path, 10)
+            self.assertFalse(register_user(database_path, 10))
             self.assertTrue(mark_read(database_path, 10, 17))
             self.assertFalse(mark_read(database_path, 10, 17))
             self.assertEqual(completed_days(database_path, 10), (17,))
