@@ -38,7 +38,7 @@ Set `BOT_TOKEN` in `.env`, then run:
 python -m app.main
 ```
 
-The bot uses long polling and needs the process to stay running. A user's first `/start` registers their Telegram ID and private chat; they must do that before using commands, menu buttons, callbacks, or inline search. No name, phone number, or other profile details are collected. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
+The bot uses long polling and needs the process to stay running. A user's first `/start` registers their Telegram ID and private chat; they must do that before using commands, menu buttons, callbacks, or inline search. No name, phone number, or other profile details are collected. Settings lets each user manage reminders and request account deletion; deletion requires confirmation and removes only that user's progress and reminder records. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
 
 ## Run checks
 

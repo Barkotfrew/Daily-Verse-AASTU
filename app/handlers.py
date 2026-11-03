@@ -21,13 +21,21 @@ from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 
 from app.database import (
     completed_days,
+    delete_user,
     mark_read,
     reminders_enabled,
     register_user,
     set_reminders_enabled,
     user_is_registered,
 )
-from app.messages import REGISTRATION_COMPLETE, REGISTRATION_EXISTING, REGISTRATION_REQUIRED
+from app.messages import (
+    ACCOUNT_DELETED,
+    DELETE_ACCOUNT_CANCELLED,
+    DELETE_ACCOUNT_PROMPT,
+    REGISTRATION_COMPLETE,
+    REGISTRATION_EXISTING,
+    REGISTRATION_REQUIRED,
+)
 from app.registration import RegistrationGate
 from app.bible import JsonBibleRepository, format_chapter_messages
 from app.inline_search import parse_chapter_start_parameter, search_inline
@@ -406,7 +414,10 @@ def build_router(
         enabled = reminders_enabled(database_path, message.from_user.id)
         label = "Turn reminders off" if enabled else "Turn reminders on"
         keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="toggle_reminders")]]
+            inline_keyboard=[
+                [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
+                [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
+            ]
         )
         status = "on" if enabled else "off"
         delivery_note = (
@@ -440,9 +451,49 @@ def build_router(
             await callback.message.edit_text(
                 f"Daily reminders are {status}. {delivery_note}",
                 reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="toggle_reminders")]]
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
+                        [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
+                    ]
                 ),
             )
+
+    @router.callback_query(F.data == "delete_account")
+    async def request_account_deletion(callback: CallbackQuery) -> None:
+        if callback.from_user is None or callback.message is None:
+            await _answer_callback(callback, "Could not identify your account.", show_alert=True)
+            return
+        if callback.message.chat.type != "private":
+            await _answer_callback(callback, "Use this option in a private chat.", show_alert=True)
+            return
+        await _answer_callback(callback)
+        await callback.message.edit_text(
+            DELETE_ACCOUNT_PROMPT,
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="Confirm deletion", callback_data="delete_account:confirm")],
+                    [InlineKeyboardButton(text="Cancel", callback_data="delete_account:cancel")],
+                ]
+            ),
+        )
+
+    @router.callback_query(F.data == "delete_account:cancel")
+    async def cancel_account_deletion(callback: CallbackQuery) -> None:
+        await _answer_callback(callback)
+        if callback.message and callback.message.chat.type == "private":
+            await callback.message.edit_text(DELETE_ACCOUNT_CANCELLED)
+
+    @router.callback_query(F.data == "delete_account:confirm")
+    async def confirm_account_deletion(callback: CallbackQuery) -> None:
+        if callback.from_user is None or callback.message is None:
+            await _answer_callback(callback, "Could not identify your account.", show_alert=True)
+            return
+        if callback.message.chat.type != "private":
+            await _answer_callback(callback, "Use this option in a private chat.", show_alert=True)
+            return
+        await _answer_callback(callback)
+        delete_user(database_path, callback.from_user.id)
+        await callback.message.edit_text(ACCOUNT_DELETED)
 
     @router.message(Command("help"))
     @router.message(F.text == "Help")
@@ -451,6 +502,7 @@ def build_router(
             "Use /today to see the shared reading, /plan to browse the full plan "
             "or /plan 17 to open the page containing Day 17, "
             "and /progress to see your private completion record. "
+            "Open Settings to manage reminders or delete your account. "
             "You can mark earlier readings complete from the plan."
         )
 

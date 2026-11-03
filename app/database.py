@@ -89,6 +89,26 @@ def user_is_registered(database_path: str | Path, telegram_user_id: int) -> bool
     return row is not None
 
 
+def delete_user(database_path: str | Path, telegram_user_id: int) -> bool:
+    """Delete one user's account and personal records; return whether it existed."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute(
+                "DELETE FROM reading_completions WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            )
+            connection.execute(
+                "DELETE FROM reminder_deliveries WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            )
+            cursor = connection.execute(
+                "DELETE FROM users WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            )
+    return cursor.rowcount == 1
+
+
 def set_reminders_enabled(
     database_path: str | Path, telegram_user_id: int, enabled: bool
 ) -> None:

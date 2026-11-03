@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.database import (
     completed_days,
+    delete_user,
     due_reminder_deliveries,
     initialize_database,
     mark_reminder_sent,
@@ -54,6 +55,23 @@ class DatabaseInitializationTests(unittest.TestCase):
             set_reminders_enabled(database_path, 10, False)
             self.assertFalse(reminders_enabled(database_path, 10))
             self.assertTrue(reminders_enabled(database_path, 11))
+
+    def test_delete_user_removes_only_their_account_and_personal_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "daily.sqlite3"
+            initialize_database(database_path)
+            register_user(database_path, 10, 1010)
+            register_user(database_path, 11, 1011)
+            mark_read(database_path, 10, 17)
+            mark_read(database_path, 11, 18)
+            set_reminders_enabled(database_path, 10, False)
+
+            self.assertTrue(delete_user(database_path, 10))
+            self.assertFalse(delete_user(database_path, 10))
+            self.assertFalse(user_is_registered(database_path, 10))
+            self.assertTrue(user_is_registered(database_path, 11))
+            self.assertEqual(completed_days(database_path, 10), ())
+            self.assertEqual(completed_days(database_path, 11), (18,))
 
     def test_reminder_delivery_records_are_unique_and_persist_sent_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
