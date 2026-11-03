@@ -10,6 +10,7 @@ from app.config import load_settings
 from app.database import initialize_database
 from app.handlers import build_router
 from app.reading_plan import load_reading_plan
+from app.services.reminders import run_reminder_scheduler
 
 
 async def main() -> None:
@@ -28,10 +29,27 @@ async def main() -> None:
     bible = JsonBibleRepository(bible_path) if bible_path.is_file() else None
     bot = Bot(token=settings.bot_token)
     dispatcher = Dispatcher()
-    dispatcher.include_router(build_router(database_path, plan, bible, settings.mini_app_url))
+    dispatcher.include_router(build_router(
+        database_path,
+        plan,
+        bible,
+        settings.mini_app_url,
+        settings.reminder_scheduler_enabled,
+    ))
+    reminder_task = None
+    if settings.reminder_scheduler_enabled:
+        reminder_task = asyncio.create_task(
+            run_reminder_scheduler(bot, database_path, plan, settings.mini_app_url)
+        )
     try:
         await dispatcher.start_polling(bot)
     finally:
+        if reminder_task is not None:
+            reminder_task.cancel()
+            try:
+                await reminder_task
+            except asyncio.CancelledError:
+                pass
         await bot.session.close()
 
 

@@ -8,8 +8,11 @@ from pathlib import Path
 
 from app.database import (
     completed_days,
+    due_reminder_deliveries,
     initialize_database,
+    mark_reminder_sent,
     mark_read,
+    prepare_reminder_deliveries,
     reminders_enabled,
     register_user,
     set_reminders_enabled,
@@ -48,6 +51,29 @@ class DatabaseInitializationTests(unittest.TestCase):
             set_reminders_enabled(database_path, 10, False)
             self.assertFalse(reminders_enabled(database_path, 10))
             self.assertTrue(reminders_enabled(database_path, 11))
+
+    def test_reminder_delivery_records_are_unique_and_persist_sent_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "daily.sqlite3"
+            initialize_database(database_path)
+            register_user(database_path, 10, private_chat_id=1010)
+            register_user(database_path, 11)
+            set_reminders_enabled(database_path, 12, False)
+
+            prepare_reminder_deliveries(database_path, "2026-10-11", 1)
+            prepare_reminder_deliveries(database_path, "2026-10-11", 1)
+            due = due_reminder_deliveries(
+                database_path, "2026-10-11", "2026-10-11T04:00:00+00:00", 5
+            )
+
+            self.assertEqual(due, ((10, 1010, 0),))
+            mark_reminder_sent(database_path, "2026-10-11", 10)
+            self.assertEqual(
+                due_reminder_deliveries(
+                    database_path, "2026-10-11", "2026-10-11T04:00:30+00:00", 5
+                ),
+                (),
+            )
 
 
 if __name__ == "__main__":

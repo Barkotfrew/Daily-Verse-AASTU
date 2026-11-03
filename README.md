@@ -38,7 +38,7 @@ Set `BOT_TOKEN` in `.env`, then run:
 python -m app.main
 ```
 
-The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. Daily reminders are not scheduled yet.
+The bot uses long polling and needs the process to stay running. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
 
 ## Run checks
 
@@ -56,7 +56,9 @@ python -m unittest discover -s tests -v
 - A shared reference parser maps English and Amharic names for all 66 Protestant books to canonical IDs and parses chapter and verse ranges.
 - Telegram chapter reading and bilingual inline reference search use the same Bible data access layer.
 - A static Telegram Mini App reader is built for GitHub Pages and loads only the selected chapter asset.
-- Daily reminders are not implemented yet.
+- Daily reminders use a fixed Amharic template, the shared plan date, and individual private-chat opt-in state. The scheduler checks at 7:00 AM EAT and records one delivery per user/date to avoid resending completed deliveries after restarts.
+- Reminder sends are batched at up to 20 per second, retried up to five attempts with backoff, and isolated so a failed recipient does not interrupt other deliveries. Telegram-forbidden private chats are opted out automatically.
+- Set `REMINDER_SCHEDULER_ENABLED=true` only after verifying that the deployment runs continuously at 7:00 AM EAT and its SQLite file survives process restarts/redeploys. It defaults to `false`; `/settings` reports whether delivery is paused or active. Reminders continue after a reading is marked complete, and users can turn them off individually.
 
 ## Bible data source review
 
@@ -87,4 +89,4 @@ python -m http.server 8000 --directory webapp/dist
 
 Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare deploys, set `MINI_APP_URL=https://daily-verse-aastu.pages.dev` in the bot host's environment and restart the bot. The Bible text and Mini App are public; verify text redistribution rights before public release.
 
-Next milestone: enable GitHub Pages and test the chapter button in Telegram, then implement daily reminders. English Bible text still requires a separately licensed source.
+Next milestone: verify the chosen bot host's persistent SQLite storage and 7:00 AM EAT scheduler behavior, then enable `REMINDER_SCHEDULER_ENABLED`. English Bible text still requires a separately licensed source.

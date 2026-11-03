@@ -131,6 +131,7 @@ def build_router(
     plan: ReadingPlan,
     bible: JsonBibleRepository | None = None,
     mini_app_url: str = "",
+    reminder_scheduler_enabled: bool = False,
 ) -> Router:
     router = Router(name="daily-verse")
 
@@ -165,7 +166,8 @@ def build_router(
     @router.message(Command("start"))
     async def start(message: Message, command: CommandObject) -> None:
         if message.from_user is not None:
-            register_user(database_path, message.from_user.id)
+            private_chat_id = message.chat.id if message.chat.type == "private" else None
+            register_user(database_path, message.from_user.id, private_chat_id)
         chapter_reference = parse_chapter_start_parameter(command.args)
         if chapter_reference is not None:
             book_id, chapter_number = chapter_reference
@@ -377,14 +379,24 @@ def build_router(
     async def settings(message: Message) -> None:
         if message.from_user is None:
             return
+        register_user(
+            database_path,
+            message.from_user.id,
+            message.chat.id if message.chat.type == "private" else None,
+        )
         enabled = reminders_enabled(database_path, message.from_user.id)
         label = "Turn reminders off" if enabled else "Turn reminders on"
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="toggle_reminders")]]
         )
         status = "on" if enabled else "off"
+        delivery_note = (
+            "Reminders are sent at 7:00 AM EAT, including on days you have marked as read."
+            if reminder_scheduler_enabled
+            else "Delivery is paused until the hosting scheduler is verified and enabled."
+        )
         await message.answer(
-            f"Daily reminders are {status}. Reminder delivery will be available when scheduling is connected.",
+            f"Daily reminders are {status}. {delivery_note}",
             reply_markup=keyboard,
         )
 
@@ -393,14 +405,21 @@ def build_router(
         if callback.from_user is None:
             await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
             return
+        if callback.message and callback.message.chat.type == "private":
+            register_user(database_path, callback.from_user.id, callback.message.chat.id)
         enabled = not reminders_enabled(database_path, callback.from_user.id)
         set_reminders_enabled(database_path, callback.from_user.id, enabled)
         await _answer_callback(callback, "Reminders turned on." if enabled else "Reminders turned off.")
         if callback.message:
             label = "Turn reminders off" if enabled else "Turn reminders on"
             status = "on" if enabled else "off"
+            delivery_note = (
+                "Reminders are sent at 7:00 AM EAT, including on days you have marked as read."
+                if reminder_scheduler_enabled
+                else "Delivery is paused until the hosting scheduler is verified and enabled."
+            )
             await callback.message.edit_text(
-                f"Daily reminders are {status}. Reminder delivery will be available when scheduling is connected.",
+                f"Daily reminders are {status}. {delivery_note}",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="toggle_reminders")]]
                 ),

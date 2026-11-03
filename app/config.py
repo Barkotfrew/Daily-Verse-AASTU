@@ -12,6 +12,7 @@ class Settings:
     bot_token: str
     database_path: Path
     mini_app_url: str = ""
+    reminder_scheduler_enabled: bool = False
 
 
 def load_settings() -> Settings:
@@ -35,4 +36,6 @@ def load_settings() -> Settings:
         bot_token=os.getenv("BOT_TOKEN", "").strip(),
         database_path=Path(os.getenv("DATABASE_PATH", "data/daily_verse.sqlite3")),
         mini_app_url=mini_app_url,
+        reminder_scheduler_enabled=os.getenv("REMINDER_SCHEDULER_ENABLED", "false").strip().lower()
+        in {"1", "true", "yes", "on"},
     )
