@@ -1,15 +1,38 @@
-"""Cloudflare Worker entry point for the in-progress hosting migration.
+"""Cloudflare Worker entry point for the incremental hosting migration.
 
-This scaffold deliberately does not acknowledge Telegram updates yet. The
-existing aiogram handlers still run through long polling, and acknowledging an
-update before porting those handlers would silently discard user messages.
+Only private /start and /today messages are implemented. Do not set the
+production Telegram webhook until all commands, callbacks, and inline search
+have been migrated and tested.
 """
 
+import json
 from urllib.parse import urlparse
 
-from workers import Response, WorkerEntrypoint
+from workers import Response, WorkerEntrypoint, fetch
+from js import Object
+from pyodide.ffi import to_js
 
-from cloudflare_core import verify_webhook_secret
+from cloudflare_core import (
+    current_eat_date,
+    format_today_message,
+    private_message_parts,
+    supported_command,
+    verify_webhook_secret,
+)
+
+MAIN_MENU = {
+    "keyboard": [
+        [{"text": "Today's Reading"}, {"text": "Reading Plan"}],
+        [{"text": "My Progress"}, {"text": "Settings"}],
+        [{"text": "Help"}],
+    ],
+    "resize_keyboard": True,
+}
+
+WELCOME = (
+    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
+    "Welcome to Daily Verse. Choose an option below."
+)
 
 
 class Default(WorkerEntrypoint):
@@ -17,7 +40,13 @@ class Default(WorkerEntrypoint):
         path = urlparse(request.url).path
 
         if request.method == "GET" and path == "/health":
-            return Response.json({"status": "scaffold_only"})
+            row = await self.env.DB.prepare(
+                "SELECT COUNT(*) AS total FROM reading_plan"
+            ).first()
+            total = int(row["total"]) if row else 0
+            return Response.json(
+                {"status": "ok", "plan_loaded": total > 0, "plan_days": total}
+            )
 
         if request.method == "POST" and path == "/telegram/webhook":
             expected = getattr(self.env, "TELEGRAM_WEBHOOK_SECRET", "")
@@ -25,11 +54,63 @@ class Default(WorkerEntrypoint):
             if not verify_webhook_secret(expected, provided):
                 return Response("Unauthorized", status=401)
 
-            # Keep Telegram retrying until command/callback/inline handlers are
-            # fully migrated. Never return success for an update we discard.
-            return Response.json(
-                {"status": "not_ready", "detail": "Telegram handlers are not migrated"},
-                {"status": 503},
-            )
+            try:
+                update = await request.json()
+            except Exception:
+                return Response("Invalid JSON", status=400)
+
+            parts = private_message_parts(update)
+            if parts is None:
+                return Response("Update type not migrated", status=503)
+            user_id, chat_id, text = parts
+            command = supported_command(text)
+            if command is None:
+                return Response("Command not migrated", status=503)
+
+            # Registration is keyed only by Telegram user ID; the shared plan
+            # date is never derived from a user's registration date.
+            await self.env.DB.prepare(
+                "INSERT INTO users (telegram_user_id, private_chat_id) VALUES (?, ?) "
+                "ON CONFLICT(telegram_user_id) DO UPDATE "
+                "SET private_chat_id = excluded.private_chat_id"
+            ).bind(user_id, chat_id).run()
+
+            if command == "start":
+                await self._send_message(chat_id, WELCOME, MAIN_MENU)
+            else:
+                current_date = current_eat_date()
+                today = current_date.isoformat()
+                entry = await self.env.DB.prepare(
+                    "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+                    "FROM reading_plan WHERE gregorian_date = ?"
+                ).bind(today).first()
+                await self._send_message(
+                    chat_id, format_today_message(entry, current_date), MAIN_MENU
+                )
+
+            return Response("OK")
 
         return Response("Not found", status=404)
+
+    async def _send_message(self, chat_id: int, text: str, reply_markup: dict | None = None):
+        token = getattr(self.env, "TELEGRAM_BOT_TOKEN", "")
+        if not token:
+            raise RuntimeError("Telegram bot token is not configured")
+        payload = {"chat_id": chat_id, "text": text}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        options = to_js(
+            {
+                "method": "POST",
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps(payload, ensure_ascii=False),
+            },
+            dict_converter=Object.fromEntries,
+        )
+        response = await fetch(
+            f"https://api.telegram.org/bot{token}/sendMessage", options
+        )
+        result = await response.json()
+        if not response.ok or not result.get("ok"):
+            # Do not log the token-bearing URL or Telegram's raw response body.
+            raise RuntimeError(f"Telegram sendMessage failed with HTTP {response.status}")

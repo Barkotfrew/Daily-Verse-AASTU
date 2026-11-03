@@ -91,7 +91,7 @@ Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare 
 
 ## Cloudflare Worker migration (in progress)
 
-Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. Do not point the Telegram webhook at the Worker yet. The Worker currently exposes a health check and returns HTTP 503 for authenticated Telegram updates until the bot's commands, callbacks, inline search, progress, and reminder handlers are ported. That response prevents Telegram from treating unprocessed updates as delivered.
+Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. The Worker now has initial D1-backed registration for private `/start` and a shared-plan `/today` response. It returns HTTP 503 for update types and commands that have not been ported yet. Do not point Telegram's production webhook at the Worker until commands, callbacks, inline search, progress, and reminder handlers are all migrated and tested.
 
 The D1 schema is in `cloudflare/worker/migrations/0001_schema.sql`. The canonical reading plan is exported to `cloudflare/worker/seed/0002_reading_plan.sql`; regenerate it after an approved plan change with:
 
@@ -99,13 +99,21 @@ The D1 schema is in `cloudflare/worker/migrations/0001_schema.sql`. The canonica
 python scripts/export_d1_reading_plan.py
 ```
 
-Cloudflare's Python Worker toolchain uses `uv` and `pywrangler`. Once the Worker migration is ready to run locally, install uv and sync its isolated tool dependencies:
+Cloudflare's Python Worker toolchain uses `uv` and `pywrangler`. Install uv and sync its isolated tool dependencies:
 
 ```powershell
 winget install --id=astral-sh.uv -e
 uv sync --dev
 ```
 
-Before a future test deployment, create the D1 database and queue in Cloudflare, replace the placeholder D1 ID in `wrangler.toml`, migrate the schema, import the plan, set the Telegram token and webhook secret as Worker secrets, and verify every bot flow. Do not enable scheduled triggers until reminder delivery is implemented and tested in the deployed runtime. The Worker runtime uses Python through Pyodide; verify package compatibility before choosing Python dependencies.
+For a local Worker preview, create `.dev.vars` from `.dev.vars.example`, set local credentials there, create a D1 database in Cloudflare, and replace the placeholder ID in `wrangler.toml`. Apply the schema and plan seed to local D1, then start the Worker:
+
+```powershell
+npx wrangler d1 migrations apply daily-verse-aastu --local
+npx wrangler d1 execute daily-verse-aastu --local --file=cloudflare/worker/seed/0002_reading_plan.sql
+uv run pywrangler dev
+```
+
+The production polling bot remains separate; do not register a Telegram webhook yet. Before a future test deployment, migrate the schema, import the plan, set credentials as Worker secrets, and verify every bot flow. Do not enable scheduled triggers until reminder delivery is implemented and tested in the deployed runtime. The Worker runtime uses Python through Pyodide; verify package compatibility before choosing Python dependencies.
 
 English Bible text still requires a separately licensed source.

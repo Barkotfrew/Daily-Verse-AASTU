@@ -1,6 +1,6 @@
 """Pure helpers shared by Cloudflare Worker handlers and offline tests."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import hmac
 from typing import Any
 
@@ -16,6 +16,14 @@ def scheduled_eat_date(scheduled_timestamp_ms: int) -> str:
     """Convert Cloudflare's UTC scheduled timestamp to the shared EAT date."""
     instant = datetime.fromtimestamp(scheduled_timestamp_ms / 1000, tz=timezone.utc)
     return instant.astimezone(EAT).date().isoformat()
+
+
+def current_eat_date(now: datetime | None = None) -> date:
+    """Return today's date in the community's fixed UTC+3 timezone."""
+    instant = now or datetime.now(timezone.utc)
+    if instant.tzinfo is None:
+        raise ValueError("now must include a timezone")
+    return instant.astimezone(EAT).date()
 
 
 def private_message_parts(update: dict[str, Any]) -> tuple[int, int, str] | None:
@@ -36,6 +44,31 @@ def private_message_parts(update: dict[str, Any]) -> tuple[int, int, str] | None
     ):
         return None
     return user["id"], chat["id"], text
+
+
+def supported_command(text: str) -> str | None:
+    """Recognize only the first two commands ported to the Worker."""
+    first = text.strip().split(maxsplit=1)[0] if text.strip() else ""
+    command = first.split("@", maxsplit=1)[0].lower()
+    if command == "/start":
+        return "start"
+    if command == "/today" or text.strip() == "Today's Reading":
+        return "today"
+    return None
+
+
+def format_today_message(entry: dict[str, Any] | None, current_date: date) -> str:
+    """Render the plan entry for the shared Gregorian day, if one exists."""
+    if entry is None:
+        return (
+            "There is no scheduled reading for "
+            f"{current_date.isoformat()} in this plan."
+        )
+    return (
+        "Today's Reading\n"
+        f"Day {entry['plan_day']} · {entry['ethiopian_date']} · "
+        f"{entry['gregorian_date']}\n{entry['reading']}"
+    )
 
 
 def reminder_message(day: int, ethiopian_date: str, gregorian_date: str, reading: str) -> str:
