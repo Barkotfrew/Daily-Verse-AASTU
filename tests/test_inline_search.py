@@ -58,7 +58,25 @@ class InlineSearchTests(unittest.TestCase):
         for query in ("", "NotABook 3:16", "John xyz", "John 3:999"):
             with self.subTest(query=query):
                 self.assertTrue(search_inline(query, self.bible).articles)
-        self.assertIn("not available", search_inline("Genesis 1:1", None).articles[0].message_text)
+        unavailable = search_inline("Genesis 1:1", None).articles[0].message_text
+        self.assertIn("not available", unavailable)
+        self.assertIn("Genesis 1", unavailable)
+
+    def test_chapter_query_does_not_return_partial_source_as_a_complete_chapter(self) -> None:
+        incomplete = JsonBibleRepository.from_payload({
+            "books": [{
+                "id": "GEN",
+                "name": "ዘፍጥረት",
+                "chapters": [{
+                    "number": 1,
+                    "complete": False,
+                    "verses": [{"start": 1, "end": 1, "text": "fixture text"}],
+                }],
+            }],
+        })
+        result = search_inline("Genesis 1", incomplete)
+        self.assertEqual(len(result.articles), 1)
+        self.assertIn("missing ending text", result.articles[0].message_text)
 
     def test_chapter_deep_link_rejects_invalid_payloads(self) -> None:
         self.assertEqual(chapter_start_parameter("1SA", 3), "read_1SA_3")

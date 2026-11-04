@@ -47,6 +47,16 @@ class JsonBibleRepository:
             raw = json.loads(Path(path).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise BibleDataError(f"Could not load Bible data: {error}") from error
+        self._load_payload(raw)
+
+    @classmethod
+    def from_payload(cls, raw: dict) -> "JsonBibleRepository":
+        """Create a repository from already-loaded normalized JSON data."""
+        repository = cls.__new__(cls)
+        repository._load_payload(raw)
+        return repository
+
+    def _load_payload(self, raw: dict) -> None:
         if not isinstance(raw, dict) or not isinstance(raw.get("books"), list):
             raise BibleDataError("Bible data must contain a books list")
 
@@ -153,6 +163,10 @@ class JsonBibleRepository:
                     raise BibleDataError(f"Invalid verse data in {book_id} chapter {number}")
                 verses.append(Verse(start, end, text))
 
+            complete = chapter.get("complete", True)
+            if not isinstance(complete, bool):
+                raise BibleDataError(f"Invalid completion flag in {book_id} chapter {number}")
+
             verses.sort(key=lambda verse: verse.start)
             for previous, current in zip(verses, verses[1:]):
                 if current.start <= previous.end:
@@ -162,10 +176,12 @@ class JsonBibleRepository:
             key = (book_id, number)
             if key in self._chapters:
                 raise BibleDataError(f"Duplicate chapter {book_id} {number}")
-            self._chapters[key] = Chapter(book_id, book_name, number, tuple(verses))
+            self._chapters[key] = Chapter(
+                book_id, book_name, number, tuple(verses), complete=complete
+            )
 
     def get_chapter(self, book_id: str, chapter_number: int) -> Chapter | None:
-        """Return a complete chapter, or None when the requested data is absent."""
+        """Return chapter data when present; callers must inspect ``complete``."""
         return self._chapters.get((book_id, chapter_number))
 
     def list_chapters(self, book_id: str) -> tuple[int, ...]:

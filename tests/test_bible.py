@@ -44,6 +44,20 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertEqual([verse.label for verse in chapter.verses], ["1", "2-3"])
         self.assertIn("not scripture", chapter.verses[0].text)
 
+    def test_loaded_chapter_payload_keeps_source_completeness(self) -> None:
+        repository = JsonBibleRepository.from_payload({
+            "books": [{
+                "id": "GEN",
+                "name": "ዘፍጥረት",
+                "chapters": [{
+                    "number": 1,
+                    "complete": False,
+                    "verses": [{"start": 1, "end": 1, "text": "fixture text"}],
+                }],
+            }],
+        })
+        self.assertFalse(repository.get_chapter("GEN", 1).complete)
+
     def test_supplied_genesis_14_text_completes_verses_23_and_24(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")

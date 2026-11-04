@@ -3,8 +3,60 @@
 from datetime import date, datetime, timedelta, timezone
 import hmac
 from typing import Any
+from urllib.parse import urlencode
+
+from app.references import BOOKS
 
 EAT = timezone(timedelta(hours=3), name="EAT")
+
+
+def mini_app_reader_url(
+    base_url: str,
+    *,
+    day: int | None = None,
+    book_id: str | None = None,
+    chapter: int | None = None,
+) -> str | None:
+    """Build a safe HTTPS URL for an assigned day or canonical chapter."""
+    base = base_url.rstrip("/")
+    if not base.startswith("https://"):
+        return None
+    if isinstance(day, int) and not isinstance(day, bool) and day > 0:
+        query = urlencode({"day": day})
+    elif (
+        book_id in {book.id for book in BOOKS}
+        and isinstance(chapter, int)
+        and not isinstance(chapter, bool)
+        and 1 <= chapter <= 150
+    ):
+        query = urlencode({"book": book_id, "chapter": chapter})
+    else:
+        return None
+    return f"{base}/?{query}"
+
+
+def mini_app_chapter_asset_url(base_url: str, book_id: str, chapter: int) -> str | None:
+    """Build a Pages chapter asset URL only for known books and bounded chapters."""
+    base = base_url.rstrip("/")
+    valid_book = any(book.id == book_id for book in BOOKS)
+    if not base.startswith("https://") or not valid_book:
+        return None
+    if not isinstance(chapter, int) or isinstance(chapter, bool) or not 1 <= chapter <= 150:
+        return None
+    return f"{base}/assets/chapters/{book_id}/{chapter}.json"
+
+
+def mini_app_reader_keyboard(base_url: str, day: int) -> dict[str, Any] | None:
+    """Build the private-chat button that opens that day's assigned chapters."""
+    url = mini_app_reader_url(base_url, day=day)
+    if url is None:
+        return None
+    return {
+        "inline_keyboard": [[{
+            "text": "Read Chapters",
+            "web_app": {"url": url},
+        }]],
+    }
 
 
 def verify_webhook_secret(expected: str, provided: str | None) -> bool:

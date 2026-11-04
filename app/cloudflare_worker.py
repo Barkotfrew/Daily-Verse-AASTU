@@ -1,8 +1,8 @@
 """Cloudflare Worker entry point for the incremental hosting migration.
 
-Private signup, /today, /progress, and paged /plan browsing are implemented.
-Do not set the production Telegram webhook until all commands, inline search,
-and reminder delivery have been migrated and tested.
+Private signup, reading-plan browsing, assigned-reading Mini App links, and
+bilingual Amharic inline reference search are implemented. Keep the production
+webhook on the polling bot until all remaining commands and reminders are tested.
 """
 
 import json
@@ -12,11 +12,17 @@ from workers import Response, WorkerEntrypoint, fetch
 from js import Object
 from pyodide.ffi import to_js
 
+from app.bible import JsonBibleRepository
+from app.inline_search import parse_chapter_start_parameter, search_inline
+from app.references import BOOKS, ReferenceParseError, parse_reference
 from cloudflare_core import (
     current_eat_date,
     format_progress_message,
     format_today_message,
     format_plan_page,
+    mini_app_chapter_asset_url,
+    mini_app_reader_keyboard,
+    mini_app_reader_url,
     normalize_signup_value,
     plan_page_for_command,
     plan_day_keyboard,
@@ -94,6 +100,11 @@ class Default(WorkerEntrypoint):
             callback = update.get("callback_query")
             if isinstance(callback, dict):
                 await self._handle_plan_callback(callback)
+                return Response("OK")
+
+            inline_query = update.get("inline_query")
+            if isinstance(inline_query, dict):
+                await self._handle_inline_query(inline_query)
                 return Response("OK")
 
             parts = private_message_parts(update)
@@ -191,7 +202,10 @@ class Default(WorkerEntrypoint):
                         "FROM reading_plan WHERE gregorian_date = ?"
                     ).bind(today).first()
                     response_message = format_today_message(entry, current_date)
-                    reply_markup = MAIN_MENU
+                    reply_markup = (
+                        self._reader_keyboard(int(entry["plan_day"]))
+                        if entry else MAIN_MENU
+                    )
                 elif command == "plan":
                     total_row = await self.env.DB.prepare(
                         "SELECT COUNT(*) AS total FROM reading_plan"
@@ -301,6 +315,9 @@ class Default(WorkerEntrypoint):
                 f"{entry['ethiopian_date']} · {entry['gregorian_date']}\n{entry['reading']}"
             )
             keyboard = plan_day_keyboard(day, total_days, page_size)
+            reader_keyboard = self._reader_keyboard(day)
+            if reader_keyboard:
+                keyboard["inline_keyboard"].extend(reader_keyboard["inline_keyboard"])
         else:
             return True
 
@@ -308,6 +325,136 @@ class Default(WorkerEntrypoint):
             chat["id"], message["message_id"], text, keyboard
         )
         return True
+
+    async def _handle_inline_query(self, inline_query):
+        query_id = inline_query.get("id")
+        user = inline_query.get("from") or {}
+        if not isinstance(query_id, str) or not isinstance(user.get("id"), int):
+            return
+
+        profile = await self.env.DB.prepare(
+            "SELECT display_name, academic_year, department FROM users "
+            "WHERE telegram_user_id = ?"
+        ).bind(user["id"]).first()
+        if profile is None or next_signup_field(profile) is not None:
+            await self._telegram_request(
+                "answerInlineQuery",
+                {
+                    "inline_query_id": query_id,
+                    "results": [],
+                    "cache_time": 0,
+                    "is_personal": True,
+                    "button": {
+                        "text": "Open Daily Verse to register",
+                        "start_parameter": "register",
+                    },
+                },
+            )
+            return
+
+        query = inline_query.get("query")
+        if not isinstance(query, str):
+            query = ""
+        response = await self._search_inline_from_pages(query)
+        result_payload = [
+            {
+                "type": "article",
+                "id": article.id,
+                "title": article.title,
+                "description": article.description,
+                "input_message_content": {"message_text": article.message_text},
+            }
+            for article in response.articles
+        ]
+        answer = {
+            "inline_query_id": query_id,
+            "results": result_payload,
+            "cache_time": 30 if query.strip() else 0,
+            "is_personal": True,
+        }
+        if response.chapter_start_parameter:
+            chapter_ref = parse_chapter_start_parameter(response.chapter_start_parameter)
+            reader_url = (
+                self._reader_url(book_id=chapter_ref[0], chapter=chapter_ref[1])
+                if chapter_ref else None
+            )
+            if reader_url:
+                answer["button"] = {
+                    "text": "Open full chapter in Daily Verse",
+                    "web_app": {"url": reader_url},
+                }
+        await self._telegram_request("answerInlineQuery", answer)
+
+    async def _search_inline_from_pages(self, query):
+        # Parsing and result formatting are shared with the polling bot. The
+        # Worker fetches only the requested chapter asset from the Pages site.
+        empty_repository = JsonBibleRepository.from_payload({"books": []})
+        if not query.strip():
+            return search_inline(query, empty_repository)
+        try:
+            reference = parse_reference(query)
+        except ReferenceParseError:
+            return search_inline(query, empty_repository)
+        if reference.chapter_start != reference.chapter_end:
+            return search_inline(query, empty_repository)
+
+        repository = await self._fetch_bible_chapter(
+            reference.book_id, reference.chapter_start
+        )
+        return search_inline(query, repository)
+
+    async def _fetch_bible_chapter(self, book_id, chapter_number):
+        asset_url = self._chapter_asset_url(book_id, chapter_number)
+        if not asset_url:
+            return None
+        book = next((item for item in BOOKS if item.id == book_id), None)
+        if book is None:
+            return None
+        try:
+            response = await fetch(asset_url)
+            if not response.ok:
+                return None
+            chapter = await response.json()
+            if (
+                not isinstance(chapter, dict)
+                or chapter.get("book_id") != book_id
+                or chapter.get("number") != chapter_number
+                or not isinstance(chapter.get("verses"), list)
+            ):
+                return None
+            return JsonBibleRepository.from_payload({
+                "books": [{
+                    "id": book_id,
+                    "name": chapter.get("book_name") or book.amharic,
+                    "chapters": [{
+                        "number": chapter_number,
+                        "complete": chapter.get("complete", False),
+                        "verses": chapter["verses"],
+                    }],
+                }],
+            })
+        except Exception:
+            # Missing or malformed assets yield a normal unavailable result;
+            # never guess text or send an incomplete chapter as complete.
+            return None
+
+    def _chapter_asset_url(self, book_id, chapter_number):
+        return mini_app_chapter_asset_url(
+            getattr(self.env, "MINI_APP_URL", ""), book_id, chapter_number
+        )
+
+    def _reader_url(self, day=None, book_id=None, chapter=None):
+        return mini_app_reader_url(
+            getattr(self.env, "MINI_APP_URL", ""),
+            day=day,
+            book_id=book_id,
+            chapter=chapter,
+        )
+
+    def _reader_keyboard(self, day):
+        return mini_app_reader_keyboard(
+            getattr(self.env, "MINI_APP_URL", ""), day
+        )
 
     async def _answer_callback(self, callback_id, text="", show_alert=False):
         await self._telegram_request(
@@ -350,4 +497,4 @@ class Default(WorkerEntrypoint):
         result = await response.json()
         if not response.ok or not result.get("ok"):
             # Do not log the token-bearing URL or Telegram's raw response body.
-            raise RuntimeError(f"Telegram sendMessage failed with HTTP {response.status}")
+            raise RuntimeError(f"Telegram {method} failed with HTTP {response.status}")

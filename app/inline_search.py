@@ -76,8 +76,6 @@ def search_inline(query: str, bible: JsonBibleRepository | None) -> InlineSearch
     """Resolve an English or Amharic reference into concise shareable articles."""
     if not query or not query.strip():
         return _help_response("Type a Bible reference such as John 3:16 or ዮሐንስ 3:16.")
-    if bible is None:
-        return _help_response("Amharic Bible text is not available right now.")
     try:
         reference = parse_reference(query)
     except ReferenceParseError:
@@ -86,6 +84,11 @@ def search_inline(query: str, bible: JsonBibleRepository | None) -> InlineSearch
         )
 
     book = _BOOK_BY_ID[reference.book_id]
+    if bible is None:
+        return _help_response(
+            f"Amharic Bible text for {book.english} {reference.chapter_start} "
+            "is not available right now."
+        )
     if reference.is_verse_reference:
         assert reference.verse_start is not None
         verse_end = reference.verse_end or reference.verse_start

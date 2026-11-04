@@ -8,6 +8,9 @@ from app.cloudflare_core import (
     normalize_signup_value,
     escape_sql_text,
     format_progress_message,
+    mini_app_chapter_asset_url,
+    mini_app_reader_keyboard,
+    mini_app_reader_url,
     format_plan_page,
     format_today_message,
     is_start_command,
@@ -102,6 +105,29 @@ class CloudflareCoreTests(unittest.TestCase):
         final_day = plan_day_keyboard(231, 231)
         self.assertEqual(len(final_day["inline_keyboard"]), 2)
         self.assertEqual(final_day["inline_keyboard"][-1][0]["callback_data"], "planpage:17")
+
+    def test_mini_app_reader_links_are_https_and_use_known_references(self) -> None:
+        base = "https://daily-verse-aastu.pages.dev/"
+        self.assertEqual(
+            mini_app_reader_url(base, day=17),
+            "https://daily-verse-aastu.pages.dev/?day=17",
+        )
+        self.assertEqual(
+            mini_app_reader_url(base, book_id="GEN", chapter=1),
+            "https://daily-verse-aastu.pages.dev/?book=GEN&chapter=1",
+        )
+        self.assertIsNone(mini_app_reader_url("http://example.com", day=1))
+        self.assertIsNone(mini_app_reader_url(base, book_id="UNKNOWN", chapter=1))
+        self.assertIsNone(mini_app_reader_url(base, book_id="GEN", chapter=151))
+        self.assertEqual(
+            mini_app_chapter_asset_url(base, "GEN", 1),
+            "https://daily-verse-aastu.pages.dev/assets/chapters/GEN/1.json",
+        )
+        self.assertIsNone(mini_app_chapter_asset_url(base, "GEN", 0))
+        self.assertEqual(
+            mini_app_reader_keyboard(base, 17)["inline_keyboard"][0][0]["web_app"]["url"],
+            "https://daily-verse-aastu.pages.dev/?day=17",
+        )
 
     def test_start_is_registration_and_other_commands_require_it_first(self) -> None:
         self.assertFalse(registration_required("start", False))
