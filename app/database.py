@@ -4,7 +4,7 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-from app.cloudflare_core import normalize_display_name
+from app.cloudflare_core import normalize_display_name, normalize_signup_value
 
 
 def initialize_database(database_path: str | Path) -> None:
@@ -21,6 +21,8 @@ def initialize_database(database_path: str | Path) -> None:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     private_chat_id INTEGER,
                     display_name TEXT,
+                    academic_year TEXT,
+                    department TEXT,
                     reminders_enabled INTEGER NOT NULL DEFAULT 1
                         CHECK (reminders_enabled IN (0, 1))
                 )
@@ -31,6 +33,10 @@ def initialize_database(database_path: str | Path) -> None:
                 connection.execute("ALTER TABLE users ADD COLUMN private_chat_id INTEGER")
             if "display_name" not in columns:
                 connection.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+            if "academic_year" not in columns:
+                connection.execute("ALTER TABLE users ADD COLUMN academic_year TEXT")
+            if "department" not in columns:
+                connection.execute("ALTER TABLE users ADD COLUMN department TEXT")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS reading_completions (
@@ -89,7 +95,9 @@ def user_is_registered(database_path: str | Path, telegram_user_id: int) -> bool
     with closing(sqlite3.connect(database_path)) as connection:
         row = connection.execute(
             "SELECT 1 FROM users WHERE telegram_user_id = ? "
-            "AND display_name IS NOT NULL AND trim(display_name) != ''",
+            "AND display_name IS NOT NULL AND trim(display_name) != '' "
+            "AND academic_year IS NOT NULL AND trim(academic_year) != '' "
+            "AND department IS NOT NULL AND trim(department) != ''",
             (telegram_user_id,),
         ).fetchone()
     return row is not None
@@ -104,8 +112,47 @@ def user_has_account(database_path: str | Path, telegram_user_id: int) -> bool:
     return row is not None
 
 
+def signup_stage(database_path: str | Path, telegram_user_id: int) -> str | None:
+    """Return the next missing field, or ``complete`` when signup is finished."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT display_name, academic_year, department FROM users WHERE telegram_user_id = ?",
+            (telegram_user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    for field, value in zip(("name", "year", "department"), row):
+        if not value or not value.strip():
+            return field
+    return "complete"
+
+
+def save_signup_field(
+    database_path: str | Path, telegram_user_id: int, field: str, value: str
+) -> bool:
+    """Save one validated field only when it is the user's current signup step."""
+    rules = {
+        "name": ("display_name", 2, 64),
+        "year": ("academic_year", 1, 24),
+        "department": ("department", 2, 80),
+    }
+    if field not in rules or signup_stage(database_path, telegram_user_id) != field:
+        return False
+    column, minimum, maximum = rules[field]
+    cleaned = normalize_signup_value(value, minimum, maximum)
+    if cleaned is None:
+        return False
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            cursor = connection.execute(
+                f"UPDATE users SET {column} = ? WHERE telegram_user_id = ? AND {column} IS NULL",
+                (cleaned, telegram_user_id),
+            )
+    return cursor.rowcount == 1
+
+
 def display_name(database_path: str | Path, telegram_user_id: int) -> str | None:
-    """Return the user's chosen display name, if signup is complete."""
+    """Return the user's chosen display name, if one has been saved."""
     with closing(sqlite3.connect(database_path)) as connection:
         row = connection.execute(
             "SELECT display_name FROM users WHERE telegram_user_id = ?",
@@ -208,7 +255,9 @@ def prepare_reminder_deliveries(database_path: str | Path, reminder_date: str, p
                    (reminder_date, telegram_user_id, plan_day)
                    SELECT ?, telegram_user_id, ? FROM users
                    WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL
-                     AND display_name IS NOT NULL AND trim(display_name) != ''""",
+                     AND display_name IS NOT NULL AND trim(display_name) != ''
+                     AND academic_year IS NOT NULL AND trim(academic_year) != ''
+                     AND department IS NOT NULL AND trim(department) != ''""",
                 (reminder_date, plan_day),
             )
 
@@ -224,6 +273,9 @@ def due_reminder_deliveries(
                WHERE d.reminder_date = ? AND d.status != 'sent' AND d.attempts < ?
                  AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= ?)
                  AND u.reminders_enabled = 1 AND u.private_chat_id IS NOT NULL
+                 AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
+                 AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
+                 AND u.department IS NOT NULL AND trim(u.department) != ''
                ORDER BY d.telegram_user_id""",
             (reminder_date, max_attempts, now),
         ).fetchall()

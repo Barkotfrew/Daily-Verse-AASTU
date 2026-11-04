@@ -26,6 +26,7 @@ from app.database import (
     mark_read,
     reminders_enabled,
     register_user,
+    signup_stage,
     set_reminders_enabled,
     user_is_registered,
 )
@@ -36,6 +37,8 @@ from app.messages import (
     REGISTRATION_COMPLETE,
     REGISTRATION_EXISTING,
     REGISTRATION_NAME_PROMPT,
+    REGISTRATION_YEAR_PROMPT,
+    REGISTRATION_DEPARTMENT_PROMPT,
 )
 from app.keyboards import MAIN_MENU
 from app.registration import RegistrationGate
@@ -180,7 +183,14 @@ def build_router(
             return
         is_new_user = register_user(database_path, message.from_user.id, message.chat.id)
         if not user_is_registered(database_path, message.from_user.id):
-            await message.answer(REGISTRATION_NAME_PROMPT)
+            prompts = {
+                "name": REGISTRATION_NAME_PROMPT,
+                "year": REGISTRATION_YEAR_PROMPT,
+                "department": REGISTRATION_DEPARTMENT_PROMPT,
+            }
+            await message.answer(
+                prompts.get(signup_stage(database_path, message.from_user.id), REGISTRATION_NAME_PROMPT)
+            )
             return
         chapter_reference = parse_chapter_start_parameter(command.args)
         if chapter_reference is not None:

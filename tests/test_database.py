@@ -18,6 +18,7 @@ from app.database import (
     reminders_enabled,
     register_user,
     save_display_name,
+    save_signup_field,
     set_reminders_enabled,
     user_is_registered,
 )
@@ -39,7 +40,10 @@ class DatabaseInitializationTests(unittest.TestCase):
 
             self.assertEqual(table, ("users",))
             self.assertTrue(
-                {"telegram_user_id", "created_at", "reminders_enabled", "display_name"} <= columns
+                {
+                    "telegram_user_id", "created_at", "reminders_enabled", "display_name",
+                    "academic_year", "department",
+                } <= columns
             )
 
     def test_initialization_migrates_an_existing_users_table(self) -> None:
@@ -55,7 +59,7 @@ class DatabaseInitializationTests(unittest.TestCase):
             initialize_database(database_path)
             with closing(sqlite3.connect(database_path)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
-            self.assertIn("display_name", columns)
+            self.assertTrue({"display_name", "academic_year", "department"} <= columns)
 
     def test_registration_completion_and_reminder_settings_are_per_user(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -67,6 +71,10 @@ class DatabaseInitializationTests(unittest.TestCase):
             self.assertFalse(user_is_registered(database_path, 10))
             self.assertTrue(save_display_name(database_path, 10, "  ባርኮ  ፍሬው "))
             self.assertEqual(display_name(database_path, 10), "ባርኮ ፍሬው")
+            self.assertFalse(user_is_registered(database_path, 10))
+            self.assertFalse(save_signup_field(database_path, 10, "department", "ECS"))
+            self.assertTrue(save_signup_field(database_path, 10, "year", "2"))
+            self.assertTrue(save_signup_field(database_path, 10, "department", "ECS"))
             self.assertTrue(user_is_registered(database_path, 10))
             self.assertFalse(register_user(database_path, 10))
             self.assertTrue(mark_read(database_path, 10, 17))
@@ -86,6 +94,9 @@ class DatabaseInitializationTests(unittest.TestCase):
             register_user(database_path, 11, 1011)
             save_display_name(database_path, 10, "First reader")
             save_display_name(database_path, 11, "Second reader")
+            for user_id in (10, 11):
+                save_signup_field(database_path, user_id, "year", "2")
+                save_signup_field(database_path, user_id, "department", "ECS")
             mark_read(database_path, 10, 17)
             mark_read(database_path, 11, 18)
             set_reminders_enabled(database_path, 10, False)
@@ -103,9 +114,15 @@ class DatabaseInitializationTests(unittest.TestCase):
             initialize_database(database_path)
             register_user(database_path, 10, private_chat_id=1010)
             save_display_name(database_path, 10, "Reader")
+            save_signup_field(database_path, 10, "year", "2")
+            save_signup_field(database_path, 10, "department", "ECS")
             register_user(database_path, 11)
             register_user(database_path, 12, private_chat_id=1012)
-            set_reminders_enabled(database_path, 12, False)
+            register_user(database_path, 13, private_chat_id=1013)
+            save_display_name(database_path, 13, "Opted out")
+            save_signup_field(database_path, 13, "year", "2")
+            save_signup_field(database_path, 13, "department", "ECS")
+            set_reminders_enabled(database_path, 13, False)
 
             prepare_reminder_deliveries(database_path, "2026-10-11", 1)
             prepare_reminder_deliveries(database_path, "2026-10-11", 1)

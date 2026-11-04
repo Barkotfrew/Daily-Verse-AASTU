@@ -7,18 +7,33 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
 from app.cloudflare_core import is_start_command
-from app.database import save_display_name, user_has_account, user_is_registered
+from app.database import save_signup_field, signup_stage, user_has_account, user_is_registered
 from app.keyboards import MAIN_MENU
 from app.messages import (
     REGISTRATION_COMPLETE,
+    REGISTRATION_DEPARTMENT_INVALID,
+    REGISTRATION_DEPARTMENT_PROMPT,
     REGISTRATION_NAME_INVALID,
     REGISTRATION_NAME_PROMPT,
     REGISTRATION_REQUIRED,
+    REGISTRATION_YEAR_INVALID,
+    REGISTRATION_YEAR_PROMPT,
 )
+
+_PROMPTS = {
+    "name": REGISTRATION_NAME_PROMPT,
+    "year": REGISTRATION_YEAR_PROMPT,
+    "department": REGISTRATION_DEPARTMENT_PROMPT,
+}
+_INVALID = {
+    "name": REGISTRATION_NAME_INVALID,
+    "year": REGISTRATION_YEAR_INVALID,
+    "department": REGISTRATION_DEPARTMENT_INVALID,
+}
 
 
 class RegistrationGate(BaseMiddleware):
-    """Collect a chosen name after /start, then unlock bot features."""
+    """Collect signup details after /start, then unlock bot features."""
 
     def __init__(self, database_path: str | Path) -> None:
         self.database_path = database_path
@@ -41,13 +56,21 @@ class RegistrationGate(BaseMiddleware):
             if not user_has_account(self.database_path, user.id):
                 await event.answer(REGISTRATION_REQUIRED)
                 return None
+            stage = signup_stage(self.database_path, user.id)
             if event.text and not event.text.strip().startswith("/"):
-                if save_display_name(self.database_path, user.id, event.text):
-                    await event.answer(REGISTRATION_COMPLETE, reply_markup=MAIN_MENU)
+                if stage in _PROMPTS and save_signup_field(
+                    self.database_path, user.id, stage, event.text
+                ):
+                    next_stage = signup_stage(self.database_path, user.id)
+                    if next_stage == "complete":
+                        await event.answer(REGISTRATION_COMPLETE, reply_markup=MAIN_MENU)
+                    else:
+                        await event.answer(_PROMPTS[next_stage])
                 else:
-                    await event.answer(REGISTRATION_NAME_INVALID)
+                    await event.answer(_INVALID.get(stage, REGISTRATION_NAME_INVALID))
                 return None
-            await event.answer(REGISTRATION_NAME_PROMPT)
+            stage = signup_stage(self.database_path, user.id)
+            await event.answer(_PROMPTS.get(stage, REGISTRATION_NAME_PROMPT))
         elif isinstance(event, CallbackQuery):
             try:
                 await event.answer(REGISTRATION_REQUIRED, show_alert=True)
@@ -60,5 +83,6 @@ class RegistrationGate(BaseMiddleware):
                 and event.message.chat.type == "private"
                 and user_has_account(self.database_path, user.id)
             ):
-                await event.message.answer(REGISTRATION_NAME_PROMPT)
+                stage = signup_stage(self.database_path, user.id)
+                await event.message.answer(_PROMPTS.get(stage, REGISTRATION_NAME_PROMPT))
         return None

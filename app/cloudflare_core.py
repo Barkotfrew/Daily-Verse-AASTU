@@ -56,10 +56,15 @@ def is_start_command(text: str | None) -> bool:
 
 def normalize_display_name(text: str | None) -> str | None:
     """Clean a signup name and reject commands or unusably short/long values."""
+    return normalize_signup_value(text, 2, 64)
+
+
+def normalize_signup_value(text: str | None, minimum: int, maximum: int) -> str | None:
+    """Normalize a private signup field and reject commands or invalid lengths."""
     if not isinstance(text, str):
         return None
     value = " ".join(text.split())
-    if not 2 <= len(value) <= 32 or value.startswith("/"):
+    if not minimum <= len(value) <= maximum or value.startswith("/"):
         return None
     return value
 

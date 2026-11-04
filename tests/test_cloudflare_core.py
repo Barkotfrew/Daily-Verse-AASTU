@@ -5,6 +5,7 @@ import unittest
 from app.cloudflare_core import (
     current_eat_date,
     normalize_display_name,
+    normalize_signup_value,
     escape_sql_text,
     format_today_message,
     is_start_command,
@@ -24,7 +25,11 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertIsNone(normalize_display_name("/today"))
         self.assertIsNone(normalize_display_name(" "))
         self.assertIsNone(normalize_display_name("x"))
-        self.assertIsNone(normalize_display_name("A" * 33))
+        self.assertIsNone(normalize_display_name("A" * 65))
+        self.assertEqual(
+            normalize_signup_value(" Electrical and Computer Engineering ", 2, 80),
+            "Electrical and Computer Engineering",
+        )
 
     def test_webhook_secret_requires_both_values_and_matches_exactly(self) -> None:
         self.assertTrue(verify_webhook_secret("secret", "secret"))
