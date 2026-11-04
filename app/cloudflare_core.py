@@ -70,13 +70,15 @@ def normalize_signup_value(text: str | None, minimum: int, maximum: int) -> str 
 
 
 def supported_command(text: str) -> str | None:
-    """Recognize only the first two commands ported to the Worker."""
+    """Recognize commands currently ported to the Worker."""
     first = text.strip().split(maxsplit=1)[0] if text.strip() else ""
     command = first.split("@", maxsplit=1)[0].lower()
     if is_start_command(text):
         return "start"
     if command == "/today" or text.strip() == "Today's Reading":
         return "today"
+    if command == "/progress" or text.strip() == "My Progress":
+        return "progress"
     return None
 
 
@@ -96,6 +98,16 @@ def format_today_message(entry: dict[str, Any] | None, current_date: date) -> st
         "Today's Reading\n"
         f"Day {entry['plan_day']} · {entry['ethiopian_date']} · "
         f"{entry['gregorian_date']}\n{entry['reading']}"
+    )
+
+
+def format_progress_message(completed: int, total: int, recent_days: tuple[int, ...]) -> str:
+    """Format a user's own private completion summary."""
+    percentage = completed / total * 100 if total else 0
+    history = ", ".join(str(day) for day in recent_days) or "None yet"
+    return (
+        f"My Progress\n{completed} of {total} readings completed "
+        f"({percentage:.1f}%).\nRecent completed days: {history}"
     )
 
 

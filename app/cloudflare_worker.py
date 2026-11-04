@@ -14,6 +14,7 @@ from pyodide.ffi import to_js
 
 from cloudflare_core import (
     current_eat_date,
+    format_progress_message,
     format_today_message,
     normalize_signup_value,
     private_message_parts,
@@ -165,13 +166,31 @@ class Default(WorkerEntrypoint):
 
                 current_date = current_eat_date()
                 today = current_date.isoformat()
-                entry = await self.env.DB.prepare(
-                    "SELECT plan_day, ethiopian_date, reading, gregorian_date "
-                    "FROM reading_plan WHERE gregorian_date = ?"
-                ).bind(today).first()
-                await self._send_message(
-                    chat_id, format_today_message(entry, current_date), MAIN_MENU
-                )
+                if command == "today":
+                    entry = await self.env.DB.prepare(
+                        "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+                        "FROM reading_plan WHERE gregorian_date = ?"
+                    ).bind(today).first()
+                    response_message = format_today_message(entry, current_date)
+                else:
+                    stats = await self.env.DB.prepare(
+                        "SELECT (SELECT COUNT(*) FROM reading_completions "
+                        "WHERE telegram_user_id = ?) AS completed, "
+                        "(SELECT COUNT(*) FROM reading_plan) AS total"
+                    ).bind(user_id).first()
+                    history_rows = await self.env.DB.prepare(
+                        "SELECT plan_day FROM reading_completions "
+                        "WHERE telegram_user_id = ? ORDER BY plan_day DESC LIMIT 10"
+                    ).bind(user_id).all()
+                    recent_days = tuple(
+                        row["plan_day"] for row in history_rows.results
+                    ) if history_rows else ()
+                    response_message = format_progress_message(
+                        int(stats["completed"]) if stats else 0,
+                        int(stats["total"]) if stats else 0,
+                        recent_days,
+                    )
+                await self._send_message(chat_id, response_message, MAIN_MENU)
 
             return Response("OK")
 

@@ -7,6 +7,7 @@ from app.cloudflare_core import (
     normalize_display_name,
     normalize_signup_value,
     escape_sql_text,
+    format_progress_message,
     format_today_message,
     is_start_command,
     private_message_parts,
@@ -52,6 +53,8 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertEqual(supported_command("/start@ExampleBot payload"), "start")
         self.assertEqual(supported_command("/today"), "today")
         self.assertEqual(supported_command("Today's Reading"), "today")
+        self.assertEqual(supported_command("/progress"), "progress")
+        self.assertEqual(supported_command("My Progress"), "progress")
         self.assertIsNone(supported_command("/plan"))
         self.assertTrue(is_start_command("/start@ExampleBot register"))
         self.assertFalse(is_start_command("/today"))
@@ -78,6 +81,18 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertEqual(
             format_today_message(None, date(2026, 11, 4)),
             "There is no scheduled reading for 2026-11-04 in this plan.",
+        )
+
+    def test_progress_message_is_private_summary_with_distinct_reading_days(self) -> None:
+        self.assertEqual(
+            format_progress_message(3, 231, (17, 8, 2)),
+            "My Progress\n3 of 231 readings completed (1.3%).\n"
+            "Recent completed days: 17, 8, 2",
+        )
+        self.assertEqual(
+            format_progress_message(0, 0, ()),
+            "My Progress\n0 of 0 readings completed (0.0%).\n"
+            "Recent completed days: None yet",
         )
 
     def test_only_private_text_messages_are_extracted(self) -> None:
