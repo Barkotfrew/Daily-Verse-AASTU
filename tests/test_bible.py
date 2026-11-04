@@ -68,6 +68,17 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIn("አንተ። አብራምን", chapter.verses[22].text)
         self.assertIn("ይውሰዱ።", chapter.verses[23].text)
 
+    def test_genesis_46_correction_fills_only_missing_verse_34(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter = source.get_chapter("GEN", 46)
+
+        self.assertTrue(chapter.complete)
+        self.assertEqual(len(chapter.verses), 34)
+        self.assertEqual(chapter.verses[-1].label, "34")
+        self.assertIn("እንስሳ አርቢዎች ነን።", chapter.verses[-1].text)
+        self.assertNotIn("q ቍ@", chapter.verses[-1].text)
+
     def test_job_41_has_26_verses_and_is_complete(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")

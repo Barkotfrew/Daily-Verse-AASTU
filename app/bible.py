@@ -43,11 +43,13 @@ class JsonBibleRepository:
     """Read normalized, local JSON data using canonical book identifiers."""
 
     def __init__(self, path: str | Path):
+        source_path = Path(path)
         try:
-            raw = json.loads(Path(path).read_text(encoding="utf-8"))
+            raw = json.loads(source_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise BibleDataError(f"Could not load Bible data: {error}") from error
         self._load_payload(raw)
+        self._load_corrections(source_path.with_name(f"{source_path.stem}.corrections.json"))
 
     @classmethod
     def from_payload(cls, raw: dict) -> "JsonBibleRepository":
@@ -68,6 +70,74 @@ class JsonBibleRepository:
             self._load_amharic_source(raw["books"])
         else:
             raise BibleDataError("Unrecognized Bible books schema")
+
+    def _load_corrections(self, path: Path) -> None:
+        """Apply small, reviewed verse corrections without rewriting source dumps."""
+        if not path.is_file():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise BibleDataError(f"Could not load Bible corrections: {error}") from error
+        corrections = payload.get("chapters") if isinstance(payload, dict) else None
+        if not isinstance(corrections, list):
+            raise BibleDataError("Bible corrections must contain a chapters list")
+
+        for correction in corrections:
+            if not isinstance(correction, dict):
+                raise BibleDataError("Invalid Bible chapter correction")
+            book_id = correction.get("book_id")
+            number = correction.get("chapter")
+            rows = correction.get("verses")
+            complete = correction.get("complete")
+            if (
+                not isinstance(book_id, str)
+                or not isinstance(number, int)
+                or isinstance(number, bool)
+                or not isinstance(rows, list)
+                or not rows
+                or not isinstance(complete, bool)
+            ):
+                raise BibleDataError("Bible chapter correction has invalid fields")
+            existing = self.get_chapter(book_id, number)
+            if existing is None:
+                raise BibleDataError(f"Cannot correct missing chapter {book_id} {number}")
+
+            additions = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise BibleDataError(f"Invalid corrected verse in {book_id} {number}")
+                start = row.get("start")
+                end = row.get("end", start)
+                text = row.get("text")
+                if (
+                    not isinstance(start, int)
+                    or isinstance(start, bool)
+                    or not isinstance(end, int)
+                    or isinstance(end, bool)
+                    or start < 1
+                    or end < start
+                    or not isinstance(text, str)
+                    or not text.strip()
+                ):
+                    raise BibleDataError(f"Invalid corrected verse in {book_id} {number}")
+                additions.append(Verse(start, end, text))
+
+            verses = tuple(sorted((*existing.verses, *additions), key=lambda verse: verse.start))
+            for previous, current in zip(verses, verses[1:]):
+                if current.start <= previous.end:
+                    raise BibleDataError(f"Overlapping correction in {book_id} {number}")
+                if current.start != previous.end + 1:
+                    raise BibleDataError(f"Correction leaves a verse gap in {book_id} {number}")
+            if not verses or verses[0].start != 1:
+                raise BibleDataError(f"Corrected chapter {book_id} {number} does not start at verse 1")
+            self._chapters[(book_id, number)] = Chapter(
+                existing.book_id,
+                existing.book_name,
+                existing.number,
+                verses,
+                complete=complete,
+            )
 
     def _load_amharic_source(self, books: list[object]) -> None:
         """Load magna25's source layout, whose book order follows the Protestant canon.
