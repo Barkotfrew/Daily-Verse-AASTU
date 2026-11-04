@@ -14,11 +14,13 @@ from app.database import (
     initialize_database,
     mark_reminder_sent,
     mark_read,
+    profile_details,
     prepare_reminder_deliveries,
     reminders_enabled,
     register_user,
     save_display_name,
     save_signup_field,
+    update_profile_field,
     set_reminders_enabled,
     user_is_registered,
 )
@@ -76,6 +78,15 @@ class DatabaseInitializationTests(unittest.TestCase):
             self.assertTrue(save_signup_field(database_path, 10, "year", "2"))
             self.assertTrue(save_signup_field(database_path, 10, "department", "ECS"))
             self.assertTrue(user_is_registered(database_path, 10))
+            self.assertTrue(update_profile_field(database_path, 10, "name", "  Updated Name  "))
+            self.assertTrue(update_profile_field(database_path, 10, "year", "3rd year"))
+            self.assertFalse(update_profile_field(database_path, 10, "department", "x"))
+            self.assertFalse(update_profile_field(database_path, 10, "telegram_user_id", "99"))
+            self.assertEqual(
+                profile_details(database_path, 10),
+                {"name": "Updated Name", "year": "3rd year", "department": "ECS"},
+            )
+            self.assertIsNone(profile_details(database_path, 99))
             self.assertFalse(register_user(database_path, 10))
             self.assertTrue(mark_read(database_path, 10, 17))
             self.assertFalse(mark_read(database_path, 10, 17))

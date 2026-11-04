@@ -57,6 +57,9 @@ class MiniAppBuildTests(unittest.TestCase):
             self.assertIn('params.set("day", String(dayNumber))', miniapp_script)
             self.assertIn('`← Day ${entry.day - 1}`', miniapp_script)
             self.assertIn('`Day ${entry.day + 1} →`', miniapp_script)
+            self.assertIn("telegram?.CloudStorage", miniapp_script)
+            self.assertIn("read-day-${dayNumber}", miniapp_script)
+            self.assertIn("loadReadStateForDay(entry.day, entry.passages)", miniapp_script)
             self.assertNotIn('id="reader-title"', miniapp_html)
             self.assertNotIn('Browse Bible', miniapp_script)
             self.assertEqual(

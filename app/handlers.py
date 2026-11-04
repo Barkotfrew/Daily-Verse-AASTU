@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -26,9 +28,11 @@ from app.database import (
     mark_read,
     reminders_enabled,
     register_user,
+    profile_details,
     signup_stage,
     set_reminders_enabled,
     user_is_registered,
+    update_profile_field,
 )
 from app.messages import (
     ACCOUNT_DELETED,
@@ -39,6 +43,9 @@ from app.messages import (
     REGISTRATION_NAME_PROMPT,
     REGISTRATION_YEAR_PROMPT,
     REGISTRATION_DEPARTMENT_PROMPT,
+    PROFILE_EDIT_INVALID,
+    PROFILE_EDIT_PROMPT,
+    PROFILE_EDIT_SAVED,
 )
 from app.keyboards import MAIN_MENU
 from app.registration import RegistrationGate
@@ -55,6 +62,39 @@ from app.readings import (
     page_for_day,
     plan_page_count,
 )
+
+
+class ProfileEdit(StatesGroup):
+    value = State()
+
+
+def _settings_keyboard(enabled: bool) -> InlineKeyboardMarkup:
+    label = "Turn reminders off" if enabled else "Turn reminders on"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
+        [InlineKeyboardButton(text="Edit my details", callback_data="profile_edit")],
+        [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
+    ])
+
+
+def _profile_edit_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Edit name", callback_data="profile_edit:name")],
+        [InlineKeyboardButton(text="Edit year of study", callback_data="profile_edit:year")],
+        [InlineKeyboardButton(text="Edit department", callback_data="profile_edit:department")],
+        [InlineKeyboardButton(text="Cancel", callback_data="profile_edit:cancel")],
+    ])
+
+
+def _settings_text(database_path: Path, user_id: int, enabled: bool, delivery_note: str) -> str:
+    profile = profile_details(database_path, user_id) or {}
+    return (
+        f"Daily reminders are {'on' if enabled else 'off'}. {delivery_note}\n\n"
+        "Your details\n"
+        f"Name: {profile.get('name') or 'Not set'}\n"
+        f"Year: {profile.get('year') or 'Not set'}\n"
+        f"Department: {profile.get('department') or 'Not set'}"
+    )
 
 async def _answer_callback(callback: CallbackQuery, *args: object, **kwargs: object) -> None:
     """Acknowledge a button tap, ignoring callbacks Telegram has already expired."""
@@ -415,6 +455,9 @@ def build_router(
     @router.message(Command("settings"))
     @router.message(F.text == "Settings")
     async def settings(message: Message) -> None:
+        if message.chat.type != "private":
+            await message.answer("Open Daily Verse in a private chat to manage your personal settings.")
+            return
         if message.from_user is None:
             return
         register_user(
@@ -423,22 +466,14 @@ def build_router(
             message.chat.id if message.chat.type == "private" else None,
         )
         enabled = reminders_enabled(database_path, message.from_user.id)
-        label = "Turn reminders off" if enabled else "Turn reminders on"
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
-                [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
-            ]
-        )
-        status = "on" if enabled else "off"
         delivery_note = (
             f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )
         await message.answer(
-            f"Daily reminders are {status}. {delivery_note}",
-            reply_markup=keyboard,
+            _settings_text(database_path, message.from_user.id, enabled, delivery_note),
+            reply_markup=_settings_keyboard(enabled),
         )
 
     @router.callback_query(F.data == "toggle_reminders")
@@ -446,28 +481,79 @@ def build_router(
         if callback.from_user is None:
             await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
             return
-        if callback.message and callback.message.chat.type == "private":
-            register_user(database_path, callback.from_user.id, callback.message.chat.id)
+        if callback.message is None or callback.message.chat.type != "private":
+            await _answer_callback(callback, "Use this option in a private chat.", show_alert=True)
+            return
+        register_user(database_path, callback.from_user.id, callback.message.chat.id)
         enabled = not reminders_enabled(database_path, callback.from_user.id)
         set_reminders_enabled(database_path, callback.from_user.id, enabled)
         await _answer_callback(callback, "Reminders turned on." if enabled else "Reminders turned off.")
         if callback.message:
-            label = "Turn reminders off" if enabled else "Turn reminders on"
-            status = "on" if enabled else "off"
             delivery_note = (
                 f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
                 if reminder_scheduler_enabled
                 else "Delivery is paused until the hosting scheduler is verified and enabled."
             )
             await callback.message.edit_text(
-                f"Daily reminders are {status}. {delivery_note}",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
-                        [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
-                    ]
-                ),
+                _settings_text(database_path, callback.from_user.id, enabled, delivery_note),
+                reply_markup=_settings_keyboard(enabled),
             )
+
+    @router.callback_query(F.data.startswith("profile_edit"))
+    async def choose_profile_field(callback: CallbackQuery, state: FSMContext) -> None:
+        if callback.from_user is None or callback.message is None:
+            await _answer_callback(callback, "Could not identify your account.", show_alert=True)
+            return
+        if callback.message.chat.type != "private":
+            await _answer_callback(callback, "Edit your details in a private chat.", show_alert=True)
+            return
+        data = callback.data or ""
+        if data == "profile_edit":
+            await _answer_callback(callback)
+            await callback.message.edit_text(
+                "Which detail would you like to update?",
+                reply_markup=_profile_edit_keyboard(),
+            )
+            return
+        action = data.partition(":")[2]
+        if action == "cancel":
+            await state.clear()
+            await _answer_callback(callback)
+            await callback.message.edit_text("Edit cancelled. Your details were not changed.")
+            return
+        if action not in PROFILE_EDIT_PROMPT:
+            await _answer_callback(callback, "That profile field is unavailable.", show_alert=True)
+            return
+        await state.update_data(profile_field=action)
+        await state.set_state(ProfileEdit.value)
+        await _answer_callback(callback)
+        await callback.message.edit_text(
+            PROFILE_EDIT_PROMPT[action],
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="Cancel", callback_data="profile_edit:cancel")
+            ]]),
+        )
+
+    @router.message(Command("cancel"), ProfileEdit.value)
+    async def cancel_profile_edit(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await message.answer("Edit cancelled. Your details were not changed.")
+
+    @router.message(ProfileEdit.value)
+    async def save_profile_edit(message: Message, state: FSMContext) -> None:
+        if message.chat.type != "private" or message.from_user is None:
+            await message.answer("Please update your details in a private chat.")
+            return
+        edit_data = await state.get_data()
+        field = edit_data.get("profile_field")
+        value = message.text or ""
+        if field not in PROFILE_EDIT_PROMPT or not update_profile_field(
+            database_path, message.from_user.id, field, value
+        ):
+            await message.answer(PROFILE_EDIT_INVALID.get(field, "That field cannot be updated."))
+            return
+        await state.clear()
+        await message.answer(PROFILE_EDIT_SAVED, reply_markup=MAIN_MENU)
 
     @router.callback_query(F.data == "delete_account")
     async def request_account_deletion(callback: CallbackQuery) -> None:

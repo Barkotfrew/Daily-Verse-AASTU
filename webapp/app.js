@@ -59,12 +59,50 @@
   const fontIncrease = document.querySelector("#font-increase");
   let books = [];
   let currentDay = null;
-  const bookmarkStorageKey = "daily-verse-bookmarks";
-  const readChapterStorageKey = "daily-verse-read-chapters";
-  const fontSizeStorageKey = "daily-verse-font-size";
+  const telegramUserId = telegram?.initDataUnsafe?.user?.id;
+  const localStorageScope = Number.isSafeInteger(telegramUserId) ? `user-${telegramUserId}` : "browser";
+  const bookmarkStorageKey = `daily-verse-bookmarks-${localStorageScope}`;
+  const readChapterStorageKey = `daily-verse-read-chapters-${localStorageScope}`;
+  const telegramCloudStorage = telegram?.CloudStorage;
+  const fontSizeStorageKey = `daily-verse-font-size-${localStorageScope}`;
   let bookmarks = [];
   let readChapters = [];
   let verseFontSize = 18;
+  const cloudReadSaveQueues = new Map();
+
+  function cloudGetItem(key) {
+    if (!telegramCloudStorage?.getItem) return Promise.resolve({ supported: false, value: null });
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ supported: false, value: null }), 2000);
+      try {
+        telegramCloudStorage.getItem(key, (error, value) => {
+          clearTimeout(timeout);
+          resolve(error
+            ? { supported: false, value: null }
+            : { supported: true, value: value ?? null });
+        });
+      } catch {
+        clearTimeout(timeout);
+        resolve({ supported: false, value: null });
+      }
+    });
+  }
+
+  function cloudSetItem(key, value) {
+    if (!telegramCloudStorage?.setItem) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 2000);
+      try {
+        telegramCloudStorage.setItem(key, value, (error, stored) => {
+          clearTimeout(timeout);
+          resolve(!error && stored !== false);
+        });
+      } catch {
+        clearTimeout(timeout);
+        resolve(false);
+      }
+    });
+  }
   try {
     const storedBookmarks = JSON.parse(localStorage.getItem(bookmarkStorageKey) ?? "[]");
     if (Array.isArray(storedBookmarks)) bookmarks = storedBookmarks;
@@ -289,6 +327,50 @@
     return `${dayNumber}:${passage.book_id}:${passage.chapter}`;
   }
 
+  function cloudChapterKey(passage) {
+    return `${passage.book_id}:${passage.chapter}`;
+  }
+
+  async function loadReadStateForDay(dayNumber, passages) {
+    const prefix = `${dayNumber}:`;
+    const localKeys = readChapters.filter((saved) => saved.startsWith(prefix));
+    const cloud = await cloudGetItem(`read-day-${dayNumber}`);
+    const cloudHasValue = cloud.value !== null && cloud.value !== "";
+    let selectedKeys = localKeys;
+    if (cloud.supported && cloudHasValue) {
+      try {
+        const saved = JSON.parse(cloud.value);
+        const allowed = new Set(passages.map(cloudChapterKey));
+        selectedKeys = Array.isArray(saved)
+          ? saved.filter((item) => typeof item === "string" && allowed.has(item))
+            .map((item) => `${prefix}${item}`)
+          : [];
+      } catch {
+        selectedKeys = [];
+      }
+    }
+    const allowedKeys = new Set(passages.map((passage) => chapterReadKey(dayNumber, passage)));
+    selectedKeys = [...new Set(selectedKeys)].filter((saved) => allowedKeys.has(saved));
+    readChapters = readChapters.filter((saved) => !saved.startsWith(prefix)).concat(selectedKeys);
+    try { localStorage.setItem(readChapterStorageKey, JSON.stringify(readChapters)); } catch { /* Keep this session usable. */ }
+    if (cloud.supported && !cloudHasValue && selectedKeys.length) {
+      await saveReadStateForDay(dayNumber, passages);
+    }
+  }
+
+  async function saveReadStateForDay(dayNumber, passages) {
+    const saved = passages
+      .map((passage) => ({ passage, key: chapterReadKey(dayNumber, passage) }))
+      .filter(({ key }) => readChapters.includes(key))
+      .map(({ passage }) => cloudChapterKey(passage));
+    try { localStorage.setItem(readChapterStorageKey, JSON.stringify(readChapters)); } catch { /* CloudStorage may still save the status. */ }
+    const key = `read-day-${dayNumber}`;
+    const previous = cloudReadSaveQueues.get(key) ?? Promise.resolve();
+    const pending = previous.catch(() => false).then(() => cloudSetItem(key, JSON.stringify(saved)));
+    cloudReadSaveQueues.set(key, pending);
+    await pending;
+  }
+
   function updateReadingProgress(passages, dayNumber) {
     const total = passages.length;
     const completed = passages.filter(({ passage }) => readChapters.includes(chapterReadKey(dayNumber, passage))).length;
@@ -340,7 +422,7 @@
       markRead.addEventListener("click", () => {
         if (readChapters.includes(key)) readChapters = readChapters.filter((itemKey) => itemKey !== key);
         else readChapters.push(key);
-        try { localStorage.setItem(readChapterStorageKey, JSON.stringify(readChapters)); } catch { /* Keep progress available for this session. */ }
+        void saveReadStateForDay(dayNumber, passages.map((item) => item.passage));
         const read = readChapters.includes(key);
         tab.classList.toggle("is-read", read);
         markRead.setAttribute("aria-pressed", String(read));
@@ -428,6 +510,7 @@
           return { passage, chapter: null, error: "unavailable" };
         }
       }));
+      await loadReadStateForDay(entry.day, entry.passages);
       const missing = [];
       const tabPassages = [];
       for (const item of loaded) {

@@ -38,7 +38,7 @@ Set `BOT_TOKEN` in `.env`, then run:
 python -m app.main
 ```
 
-The bot uses long polling and needs the process to stay running. A user's first `/start` creates a pending account and asks for their name, year of study, and department in sequence. The menu and bot features unlock after all three are saved. The name is collected for a possible future leaderboard, but no leaderboard is currently shown and reading progress remains private. Settings lets each user manage reminders and request account deletion; deletion requires confirmation and removes only that user's profile, progress, and reminder records. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
+The bot uses long polling and needs the process to stay running. A user's first `/start` creates a pending account and asks for their name, year of study, and department in sequence. The menu and bot features unlock after all three are saved. Settings lets each user manage reminders, edit their own name/year/department, and request account deletion; deletion requires confirmation and removes only that user's profile, progress, and reminder records. `/start`, `/today`, `/plan`, `/progress`, `/settings`, and `/help` are wired. `/plan` pages through the full schedule; `/plan 17` opens the page containing Day 17, and individual days open for detail/actions. Chapter reading uses the local Amharic source data and reports unavailable or incomplete chapters. The reminder service is available but is disabled by default until the deployment clock and persistent SQLite storage have been checked.
 
 ## Run checks
 
@@ -56,6 +56,7 @@ python -m unittest discover -s tests -v
 - A shared reference parser maps English and Amharic names for all 66 Protestant books to canonical IDs and parses chapter and verse ranges.
 - Telegram chapter reading and bilingual inline reference search use the same Bible data access layer.
 - A static Telegram Mini App reader is built for GitHub Pages and loads only the selected chapter asset.
+- Assigned chapter read toggles are saved per Telegram user and plan day using Telegram Mini App CloudStorage, with browser local storage as a fallback. Chapter read toggles are reader state; users still mark a plan day complete explicitly in the bot to update `/progress`.
 - Daily reminders use a fixed Amharic template, the shared plan date, and individual private-chat opt-in state. The scheduler checks at 7:00 AM EAT and records one delivery per user/date to avoid resending completed deliveries after restarts.
 - Reminder sends are batched at up to 20 per second, retried up to five attempts with backoff, and isolated so a failed recipient does not interrupt other deliveries. Telegram-forbidden private chats are opted out automatically.
 - Set `REMINDER_SCHEDULER_ENABLED=true` only after verifying that the deployment runs continuously at the configured time and its SQLite file survives process restarts/redeploys. `REMINDER_TIME` uses 24-hour EAT (`07:00` by default); it defaults to a disabled scheduler, and `/settings` reports whether delivery is paused or active. Reminders continue after a reading is marked complete, and users can turn them off individually.
@@ -80,7 +81,7 @@ Inline mode is enabled in BotFather with `/setinline`. Test in Telegram by typin
 
 The Mini App is hosted separately from the personal GitHub Pages site. The Cloudflare Pages project uses the GitHub repository with build command `python scripts/build_miniapp.py` and output directory `webapp/dist`. Cloudflare's Git integration rebuilds the static reader when changes are pushed.
 
-The builder creates chapter-sized assets and a copy of the shared reading plan under the generated `webapp/dist` directory. The `Read Chapters` button in a private chat opens the Mini App directly on that day's assigned chapters. For inline chapter searches, its button opens the requested chapter. The app fetches only the chapters it needs.
+The builder creates chapter-sized assets and a copy of the shared reading plan under the generated `webapp/dist` directory. The `Read Chapters` button in a private chat opens the Mini App directly on that day's assigned chapters. For inline chapter searches, its button opens the requested chapter. The app fetches only the chapters it needs. Read checkmarks are stored in Telegram CloudStorage under one small key per reading-plan day (within Telegram's 1,024-key per-user limit); outside Telegram, browser local storage is used. These checkmarks do not mark the day complete in the bot's private progress record.
 
 To preview locally:
 

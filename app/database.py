@@ -161,6 +161,19 @@ def display_name(database_path: str | Path, telegram_user_id: int) -> str | None
     return row[0] if row and row[0] else None
 
 
+def profile_details(database_path: str | Path, telegram_user_id: int) -> dict[str, str] | None:
+    """Read the caller's profile fields without returning other users' data."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT display_name, academic_year, department FROM users "
+            "WHERE telegram_user_id = ?",
+            (telegram_user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"name": row[0] or "", "year": row[1] or "", "department": row[2] or ""}
+
+
 def save_display_name(
     database_path: str | Path, telegram_user_id: int, name: str
 ) -> bool:
@@ -172,6 +185,30 @@ def save_display_name(
         with connection:
             cursor = connection.execute(
                 "UPDATE users SET display_name = ? WHERE telegram_user_id = ?",
+                (cleaned, telegram_user_id),
+            )
+    return cursor.rowcount == 1
+
+
+def update_profile_field(
+    database_path: str | Path, telegram_user_id: int, field: str, value: str
+) -> bool:
+    """Update one existing user's profile field after validating its length."""
+    rules = {
+        "name": ("display_name", 2, 64),
+        "year": ("academic_year", 1, 24),
+        "department": ("department", 2, 80),
+    }
+    if field not in rules:
+        return False
+    column, minimum, maximum = rules[field]
+    cleaned = normalize_signup_value(value, minimum, maximum)
+    if cleaned is None:
+        return False
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            cursor = connection.execute(
+                f"UPDATE users SET {column} = ? WHERE telegram_user_id = ?",
                 (cleaned, telegram_user_id),
             )
     return cursor.rowcount == 1

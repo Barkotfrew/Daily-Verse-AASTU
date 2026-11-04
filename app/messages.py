@@ -36,3 +36,15 @@ DELETE_ACCOUNT_PROMPT = (
 )
 DELETE_ACCOUNT_CANCELLED = "Deletion cancelled. Your account and progress are unchanged."
 ACCOUNT_DELETED = "Your account and personal records have been deleted. Send /start to register again."
+
+PROFILE_EDIT_PROMPT = {
+    "name": "Send the name you want Daily Verse to use (2–64 characters).",
+    "year": "Send your year of study (for example, 2 or 2nd year).",
+    "department": "Send your department name (2–80 characters).",
+}
+PROFILE_EDIT_INVALID = {
+    "name": "Please send a name using 2 to 64 characters.",
+    "year": "Please send your year of study, such as 2 or 2nd year.",
+    "department": "Please send a department name between 2 and 80 characters.",
+}
+PROFILE_EDIT_SAVED = "Your details have been updated."
