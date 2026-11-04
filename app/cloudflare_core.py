@@ -59,6 +59,43 @@ def mini_app_reader_keyboard(base_url: str, day: int) -> dict[str, Any] | None:
     }
 
 
+def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str, Any]:
+    """Build a private today's-reading keyboard with explicit completion."""
+    rows = [[{
+        "text": "✓ Read" if completed else "Mark as Read",
+        "callback_data": f"complete:{day}",
+    }]]
+    reader = mini_app_reader_keyboard(base_url, day)
+    if reader:
+        rows.extend(reader["inline_keyboard"])
+    return {"inline_keyboard": rows}
+
+
+def completion_button(
+    day: int, completed: bool = False, callback_prefix: str = "complete"
+) -> list[dict[str, str]]:
+    return [{
+        "text": "✓ Read" if completed else "Mark as Read",
+        "callback_data": f"{callback_prefix}:{day}",
+    }]
+
+
+def reminders_keyboard(enabled: bool) -> dict[str, Any]:
+    label = "Turn reminders off" if enabled else "Turn reminders on"
+    return {"inline_keyboard": [[{
+        "text": label,
+        "callback_data": "reminders:toggle",
+    }]]}
+
+
+def reminders_settings_message(enabled: bool) -> str:
+    state = "on" if enabled else "off"
+    return (
+        f"Settings\nDaily reminders are {state}.\n"
+        "Reminders continue after you mark a reading complete."
+    )
+
+
 def verify_webhook_secret(expected: str, provided: str | None) -> bool:
     """Constant-time compare for Telegram's configured webhook secret header."""
     return bool(expected and provided and hmac.compare_digest(expected, provided))
@@ -131,6 +168,8 @@ def supported_command(text: str) -> str | None:
         return "today"
     if command == "/progress" or text.strip() == "My Progress":
         return "progress"
+    if command == "/settings" or text.strip() == "Settings":
+        return "settings"
     if command == "/plan" or text.strip() == "Reading Plan":
         return "plan"
     return None

@@ -93,9 +93,30 @@ Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare 
 
 ## Cloudflare Worker migration (in progress)
 
-Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. The Worker remains an incomplete migration and is not the active bot backend. Do not point Telegram's production webhook at the Worker until signup, commands, callbacks, inline search, progress, and reminder handlers are all migrated and tested.
+Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. The Worker remains an incomplete migration and is not the active bot backend. Do not point Telegram's production webhook at the Worker until the complete Worker flow has been tested in Cloudflare's runtime.
 
-The Worker currently supports private signup, `/today`, `/progress`, paged `/plan` browsing, the assigned-reading Mini App button, and bilingual English/Amharic reference queries in inline mode. Plan pages contain 14 days, with inline day and page navigation; `/plan 17` opens the page containing Day 17. Progress is read from D1 and returned only in the user's private chat. Bible text is fetched one chapter at a time from the same static Pages assets used by the Mini App; the Worker does not keep a second Bible copy in D1. Inline results use the verified Amharic source text and label it accordingly. Reminder delivery has not been migrated; keep the production webhook on the polling bot until all required features are migrated and tested.
+The Worker supports private signup, `/today`, `/progress`, `/settings`, paged `/plan` browsing, the assigned-reading Mini App button, bilingual English/Amharic reference queries in inline mode, and personal completion. `Mark as Read` inserts one `(Telegram user, plan day)` completion, so repeated taps do not increase progress twice. `/settings` toggles only that user's reminder preference. Progress remains private. Bible text is fetched one chapter at a time from the same static Pages assets used by the Mini App; the Worker does not keep a second Bible copy in D1. Inline results use the verified Amharic source text and label it accordingly.
+
+Worker reminders use an at-least-once Cloudflare Queue with a D1 delivery ledger and an atomic claim before sending. The Cron handler starts at 7:00 AM EAT and processes up to 100 registered, reminder-enabled users per minute in ascending Telegram ID order; for the expected 1,200 users this schedules the batch over about 12 minutes. Users' reminders continue after completion. The final reminder for a date is never inferred beyond the plan. A network failure after Telegram accepts a message but before its response reaches the Worker is inherently ambiguous because Telegram's send API has no idempotency key; the ledger prevents ordinary duplicate queue deliveries and restarts, while retries may repeat only in that ambiguous failure case.
+
+Reminder scheduling is intentionally **not enabled in `wrangler.toml` yet**. First create a Cloudflare Queue named `daily-verse-reminders`, then add the following bindings and trigger to `wrangler.toml`; only do this after the Worker and Queue have been tested in Cloudflare's runtime:
+
+```toml
+[[queues.producers]]
+queue = "daily-verse-reminders"
+binding = "REMINDER_QUEUE"
+
+[[queues.consumers]]
+queue = "daily-verse-reminders"
+max_batch_size = 20
+max_batch_timeout = 5
+max_retries = 5
+
+[triggers]
+crons = ["* 4 * * *"] # 04:00–04:59 UTC is 07:00–07:59 EAT
+```
+
+Apply migration `0005_reminder_runs.sql` along with the earlier D1 migrations before testing the scheduler. The first registration command and all reminders remain separate from the current polling bot until a deliberate backend switch; do not set Telegram's production webhook to the Worker as part of local testing.
 
 For Worker inline search, set Telegram's webhook to include `inline_query` updates only after the Worker deployment is intentionally being tested. Registered users can query references such as `Genesis 1:1`, `Psalm 23:1`, `ዘፍጥረት 1`, and `መዝሙረ ዳዊት 23:1` in any supported chat. Chapter results offer a button to open the full chapter in the Mini App. The `/today` response and selected plan days open the assigned chapters there. These links depend on the matching chapter assets being deployed at `MINI_APP_URL`.
 
@@ -120,6 +141,6 @@ npx wrangler d1 execute daily-verse-aastu --local --file=cloudflare/worker/seed/
 uv run pywrangler dev
 ```
 
-The production polling bot remains separate; do not register a Telegram webhook yet. Before a future test deployment, migrate the schema, import the plan, set credentials as Worker secrets, and verify every bot flow. Do not enable scheduled triggers until reminder delivery is implemented and tested in the deployed runtime. The Worker runtime uses Python through Pyodide; verify package compatibility before choosing Python dependencies.
+The production polling bot remains separate; do not register a Telegram webhook yet. Before a future test deployment, migrate the schema, import the plan, set credentials as Worker secrets, and verify every bot flow. Do not enable the Queue binding or Cron trigger until the Worker and scheduler have been tested in the deployed runtime. The Worker runtime uses Python through Pyodide; verify package compatibility before choosing Python dependencies.
 
 English Bible text still requires a separately licensed source.

@@ -20,6 +20,9 @@ from app.cloudflare_core import (
     plan_page_keyboard,
     registration_required,
     reminder_message,
+    reminders_keyboard,
+    reminders_settings_message,
+    today_keyboard,
     scheduled_eat_date,
     supported_command,
     verify_webhook_secret,
@@ -64,7 +67,8 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertEqual(supported_command("My Progress"), "progress")
         self.assertEqual(supported_command("/plan 17"), "plan")
         self.assertEqual(supported_command("Reading Plan"), "plan")
-        self.assertIsNone(supported_command("/settings"))
+        self.assertEqual(supported_command("/settings"), "settings")
+        self.assertEqual(supported_command("Settings"), "settings")
         self.assertTrue(is_start_command("/start@ExampleBot register"))
         self.assertFalse(is_start_command("/today"))
         self.assertFalse(is_start_command(None))
@@ -184,6 +188,34 @@ class CloudflareCoreTests(unittest.TestCase):
             "የዛሬ ንባብ · ቀን 24\n"
             "ጥቅምት 24 · 2026-11-03\n"
             "ዘፍጥረት 35-37",
+        )
+
+    def test_personal_action_keyboards_and_reminder_setting_copy(self) -> None:
+        keyboard = today_keyboard("https://daily-verse-aastu.pages.dev", 24)
+        self.assertEqual(
+            keyboard["inline_keyboard"][0][0]["callback_data"], "complete:24"
+        )
+        self.assertEqual(
+            keyboard["inline_keyboard"][1][0]["web_app"]["url"],
+            "https://daily-verse-aastu.pages.dev/?day=24",
+        )
+        self.assertEqual(
+            reminders_keyboard(True)["inline_keyboard"][0][0]["text"],
+            "Turn reminders off",
+        )
+        self.assertIn("continue after", reminders_settings_message(True))
+
+    def test_settings_toggle_and_completion_callbacks_are_user_scoped_ids(self) -> None:
+        from app.cloudflare_core import completion_button
+
+        self.assertEqual(completion_button(231)[0]["callback_data"], "complete:231")
+        self.assertEqual(
+            completion_button(231, callback_prefix="plancomplete")[0]["callback_data"],
+            "plancomplete:231",
+        )
+        self.assertEqual(
+            reminders_keyboard(False)["inline_keyboard"][0][0]["callback_data"],
+            "reminders:toggle",
         )
 
     def test_sql_text_escapes_single_quotes(self) -> None:

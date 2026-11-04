@@ -17,19 +17,25 @@ from app.inline_search import parse_chapter_start_parameter, search_inline
 from app.references import BOOKS, ReferenceParseError, parse_reference
 from cloudflare_core import (
     current_eat_date,
+    completion_button,
     format_progress_message,
     format_today_message,
     format_plan_page,
     mini_app_chapter_asset_url,
     mini_app_reader_keyboard,
     mini_app_reader_url,
+    reminder_message,
+    reminders_keyboard,
+    reminders_settings_message,
     normalize_signup_value,
     plan_page_for_command,
     plan_day_keyboard,
     plan_page_keyboard,
     private_message_parts,
     registration_required,
+    scheduled_eat_date,
     supported_command,
+    today_keyboard,
     verify_webhook_secret,
 )
 from messages import REGISTRATION_COMPLETE, REGISTRATION_EXISTING, REGISTRATION_REQUIRED
@@ -74,6 +80,133 @@ MAIN_MENU = {
 
 
 class Default(WorkerEntrypoint):
+    async def scheduled(self, controller, env, ctx):
+        """Queue one bounded subscriber batch for a minute in the 7 AM EAT window."""
+        if getattr(controller, "cron", "") != "* 4 * * *":
+            return
+        timestamp = int(controller.scheduledTime)
+        reminder_date = scheduled_eat_date(timestamp)
+        plan = await self.env.DB.prepare(
+            "SELECT plan_day, ethiopian_date, gregorian_date, reading "
+            "FROM reading_plan WHERE gregorian_date = ?"
+        ).bind(reminder_date).first()
+        if plan is None:
+            return
+
+        await self.env.DB.prepare(
+            "INSERT OR IGNORE INTO reminder_runs (reminder_date) VALUES (?)"
+        ).bind(reminder_date).run()
+        run = await self.env.DB.prepare(
+            "SELECT last_user_id, finished FROM reminder_runs WHERE reminder_date = ?"
+        ).bind(reminder_date).first()
+        if run is None or bool(run["finished"]):
+            return
+        recipients = await self.env.DB.prepare(
+            "SELECT telegram_user_id, private_chat_id FROM users "
+            "WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL "
+            "AND display_name IS NOT NULL AND academic_year IS NOT NULL "
+            "AND department IS NOT NULL AND telegram_user_id > ? "
+            "ORDER BY telegram_user_id LIMIT 100"
+        ).bind(run["last_user_id"]).all()
+        users = tuple(recipients.results) if recipients else ()
+        if not users:
+            await self.env.DB.prepare(
+                "UPDATE reminder_runs SET finished = 1 WHERE reminder_date = ?"
+            ).bind(reminder_date).run()
+            return
+
+        insert_statements = [
+            self.env.DB.prepare(
+                "INSERT OR IGNORE INTO reminder_deliveries "
+                "(reminder_date, telegram_user_id, plan_day, status) "
+                "VALUES (?, ?, ?, 'queued')"
+            ).bind(reminder_date, user["telegram_user_id"], plan["plan_day"])
+            for user in users
+        ]
+        await self.env.DB.batch(insert_statements)
+        message = reminder_message(
+            int(plan["plan_day"]), plan["ethiopian_date"],
+            plan["gregorian_date"], plan["reading"],
+        )
+        batch = [
+            {"body": {
+                "reminder_date": reminder_date,
+                "telegram_user_id": int(user["telegram_user_id"]),
+                "chat_id": int(user["private_chat_id"]),
+                "text": message,
+            }}
+            for user in users
+        ]
+        await self.env.REMINDER_QUEUE.sendBatch(batch)
+        await self.env.DB.prepare(
+            "UPDATE reminder_runs SET last_user_id = ? WHERE reminder_date = ?"
+        ).bind(users[-1]["telegram_user_id"], reminder_date).run()
+
+    async def queue(self, batch):
+        """Deliver queued reminders independently and retry transient failures."""
+        for message in batch.messages:
+            body = message.body
+            try:
+                if not isinstance(body, dict):
+                    message.ack()
+                    continue
+                reminder_date = body.get("reminder_date")
+                user_id = body.get("telegram_user_id")
+                chat_id = body.get("chat_id")
+                text = body.get("text")
+                if (
+                    not isinstance(reminder_date, str)
+                    or not isinstance(user_id, int)
+                    or not isinstance(chat_id, int)
+                    or not isinstance(text, str)
+                ):
+                    message.ack()
+                    continue
+
+                # Claim atomically before calling Telegram. A repeated queue
+                # delivery cannot send again after a successful send/restart.
+                claim = await self.env.DB.prepare(
+                    "UPDATE reminder_deliveries SET status = 'sent', "
+                    "attempts = attempts + 1, last_error = NULL "
+                    "WHERE reminder_date = ? AND telegram_user_id = ? "
+                    "AND status IN ('queued', 'failed') "
+                    "AND EXISTS (SELECT 1 FROM users WHERE telegram_user_id = ? "
+                    "AND reminders_enabled = 1 AND private_chat_id = ?)"
+                ).bind(reminder_date, user_id, user_id, chat_id).run()
+                meta = getattr(claim, "meta", None)
+                if meta is None and isinstance(claim, dict):
+                    meta = claim.get("meta")
+                changes = getattr(meta, "changes", 0) if meta is not None else 0
+                if isinstance(meta, dict):
+                    changes = meta.get("changes", changes)
+                if not changes:
+                    message.ack()
+                    continue
+
+                try:
+                    await self._telegram_request(
+                        "sendMessage", {"chat_id": chat_id, "text": text}
+                    )
+                except Exception:
+                    await self.env.DB.prepare(
+                        "UPDATE reminder_deliveries SET status = 'failed', "
+                        "last_error = 'Telegram delivery failed' "
+                        "WHERE reminder_date = ? AND telegram_user_id = ? "
+                        "AND status = 'sent'"
+                    ).bind(reminder_date, user_id).run()
+                    if int(getattr(message, "attempts", 1)) < 5:
+                        message.retry(delaySeconds=120)
+                    else:
+                        message.ack()
+                    continue
+                message.ack()
+            except Exception:
+                # One malformed or failed item must not stop other recipients.
+                try:
+                    message.retry(delaySeconds=120)
+                except Exception:
+                    message.ack()
+
     async def fetch(self, request):
         path = urlparse(request.url).path
 
@@ -202,10 +335,18 @@ class Default(WorkerEntrypoint):
                         "FROM reading_plan WHERE gregorian_date = ?"
                     ).bind(today).first()
                     response_message = format_today_message(entry, current_date)
-                    reply_markup = (
-                        self._reader_keyboard(int(entry["plan_day"]))
-                        if entry else MAIN_MENU
-                    )
+                    if entry:
+                        completed = await self.env.DB.prepare(
+                            "SELECT 1 AS completed FROM reading_completions "
+                            "WHERE telegram_user_id = ? AND plan_day = ?"
+                        ).bind(user_id, entry["plan_day"]).first()
+                        reply_markup = today_keyboard(
+                            getattr(self.env, "MINI_APP_URL", ""),
+                            int(entry["plan_day"]),
+                            completed is not None,
+                        )
+                    else:
+                        reply_markup = MAIN_MENU
                 elif command == "plan":
                     total_row = await self.env.DB.prepare(
                         "SELECT COUNT(*) AS total FROM reading_plan"
@@ -224,6 +365,13 @@ class Default(WorkerEntrypoint):
                         entries = tuple(rows.results) if rows else ()
                         response_message = format_plan_page(entries, page, total_days)
                         reply_markup = plan_page_keyboard(page, total_days, page_size)
+                elif command == "settings":
+                    settings = await self.env.DB.prepare(
+                        "SELECT reminders_enabled FROM users WHERE telegram_user_id = ?"
+                    ).bind(user_id).first()
+                    enabled = bool(settings["reminders_enabled"]) if settings else False
+                    response_message = reminders_settings_message(enabled)
+                    reply_markup = reminders_keyboard(enabled)
                 else:
                     stats = await self.env.DB.prepare(
                         "SELECT (SELECT COUNT(*) FROM reading_completions "
@@ -273,10 +421,59 @@ class Default(WorkerEntrypoint):
         await self._answer_callback(callback_id)
 
         profile = await self.env.DB.prepare(
-            "SELECT display_name, academic_year, department FROM users "
+            "SELECT display_name, academic_year, department, reminders_enabled FROM users "
             "WHERE telegram_user_id = ?"
         ).bind(user["id"]).first()
         if profile is None or next_signup_field(profile) is not None:
+            return True
+
+        if data == "reminders:toggle":
+            await self.env.DB.prepare(
+                "UPDATE users SET reminders_enabled = 1 - reminders_enabled "
+                "WHERE telegram_user_id = ?"
+            ).bind(user["id"]).run()
+            settings = await self.env.DB.prepare(
+                "SELECT reminders_enabled FROM users WHERE telegram_user_id = ?"
+            ).bind(user["id"]).first()
+            enabled = bool(settings["reminders_enabled"]) if settings else False
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                reminders_settings_message(enabled), reminders_keyboard(enabled),
+            )
+            return True
+
+        is_plan_completion = data.startswith("plancomplete:")
+        if data.startswith("complete:") or is_plan_completion:
+            try:
+                day = int(data.split(":", 1)[1])
+            except ValueError:
+                return True
+            entry = await self.env.DB.prepare(
+                "SELECT plan_day FROM reading_plan WHERE plan_day = ?"
+            ).bind(day).first()
+            if entry is None:
+                return True
+            await self.env.DB.prepare(
+                "INSERT OR IGNORE INTO reading_completions "
+                "(telegram_user_id, plan_day) VALUES (?, ?)"
+            ).bind(user["id"], day).run()
+            if is_plan_completion:
+                plan_total = await self.env.DB.prepare(
+                    "SELECT COUNT(*) AS total FROM reading_plan"
+                ).first()
+                total_days = int(plan_total["total"]) if plan_total else 0
+                keyboard = plan_day_keyboard(day, total_days)
+                keyboard["inline_keyboard"].append(
+                    completion_button(day, True, "plancomplete")
+                )
+                reader_keyboard = self._reader_keyboard(day)
+                if reader_keyboard:
+                    keyboard["inline_keyboard"].extend(reader_keyboard["inline_keyboard"])
+            else:
+                keyboard = today_keyboard(
+                    getattr(self.env, "MINI_APP_URL", ""), day, completed=True
+                )
+            await self._edit_reply_markup(chat["id"], message["message_id"], keyboard)
             return True
 
         total_row = await self.env.DB.prepare(
@@ -315,6 +512,13 @@ class Default(WorkerEntrypoint):
                 f"{entry['ethiopian_date']} · {entry['gregorian_date']}\n{entry['reading']}"
             )
             keyboard = plan_day_keyboard(day, total_days, page_size)
+            completion = await self.env.DB.prepare(
+                "SELECT 1 AS completed FROM reading_completions "
+                "WHERE telegram_user_id = ? AND plan_day = ?"
+            ).bind(user["id"], day).first()
+            keyboard["inline_keyboard"].append(
+                completion_button(day, completion is not None, "plancomplete")
+            )
             reader_keyboard = self._reader_keyboard(day)
             if reader_keyboard:
                 keyboard["inline_keyboard"].extend(reader_keyboard["inline_keyboard"])
@@ -471,6 +675,13 @@ class Default(WorkerEntrypoint):
                 "text": text,
                 "reply_markup": reply_markup,
             },
+        )
+
+    async def _edit_reply_markup(self, chat_id, message_id, reply_markup):
+        await self._telegram_request(
+            "editMessageReplyMarkup",
+            {"chat_id": chat_id, "message_id": message_id,
+             "reply_markup": reply_markup},
         )
 
     async def _send_message(self, chat_id: int, text: str, reply_markup: dict | None = None):
