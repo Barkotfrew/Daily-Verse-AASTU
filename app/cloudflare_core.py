@@ -79,7 +79,78 @@ def supported_command(text: str) -> str | None:
         return "today"
     if command == "/progress" or text.strip() == "My Progress":
         return "progress"
+    if command == "/plan" or text.strip() == "Reading Plan":
+        return "plan"
     return None
+
+
+def plan_page_for_command(text: str, total_days: int, page_size: int = 14) -> tuple[int | None, str | None]:
+    """Resolve /plan [day] to a page; the argument selects the page containing that day."""
+    parts = text.strip().split()
+    args = parts[1:] if parts and parts[0].split("@", 1)[0].lower() == "/plan" else []
+    if len(args) > 1:
+        return None, "Use /plan followed by a day number, for example /plan 17."
+    if total_days < 1 or page_size < 1:
+        return None, "The reading plan is not available right now."
+    if not args:
+        return 1, None
+    try:
+        day = int(args[0])
+    except ValueError:
+        return None, "Use /plan followed by a day number, for example /plan 17."
+    if not 1 <= day <= total_days:
+        return None, f"Choose a plan day from 1 to {total_days}."
+    return (day - 1) // page_size + 1, None
+
+
+def format_plan_page(entries: tuple[dict[str, Any], ...], page: int, total_days: int,
+                     page_size: int = 14) -> str:
+    """Render one bounded D1 result page in the same format as the local bot."""
+    total_pages = (total_days + page_size - 1) // page_size
+    lines = [
+        f"Day {entry['plan_day']} · {entry['ethiopian_date']} · "
+        f"{entry['gregorian_date']}\n{entry['reading']}"
+        for entry in entries
+    ]
+    return (
+        f"Reading Plan · page {page}/{total_pages} · {total_days} days\n\n"
+        + "\n\n".join(lines)
+    )
+
+
+def plan_page_keyboard(page: int, total_days: int, page_size: int = 14) -> dict[str, Any]:
+    """Build inline day buttons and bounded previous/next page controls."""
+    total_pages = (total_days + page_size - 1) // page_size
+    first_day = (page - 1) * page_size + 1
+    last_day = min(page * page_size, total_days)
+    rows = []
+    days = [
+        {"text": f"Day {day}", "callback_data": f"plan:{day}"}
+        for day in range(first_day, last_day + 1)
+    ]
+    rows.extend(days[index:index + 2] for index in range(0, len(days), 2))
+    navigation = []
+    if page > 1:
+        navigation.append({"text": "← Previous", "callback_data": f"planpage:{page - 1}"})
+    if page < total_pages:
+        navigation.append({"text": "Next →", "callback_data": f"planpage:{page + 1}"})
+    if navigation:
+        rows.append(navigation)
+    return {"inline_keyboard": rows}
+
+
+def plan_day_keyboard(day: int, total_days: int, page_size: int = 14) -> dict[str, Any]:
+    """Build safe previous/next day navigation plus the containing plan page."""
+    row = []
+    if day > 1:
+        row.append({"text": "← Previous", "callback_data": f"plan:{day - 1}"})
+    if day < total_days:
+        row.append({"text": "Next →", "callback_data": f"plan:{day + 1}"})
+    rows = [row] if row else []
+    rows.append(
+        [{"text": "All Plan", "callback_data": f"planpage:{(day - 1) // page_size + 1}"}]
+    )
+    return {"inline_keyboard": rows}
 
 
 def registration_required(command: str, registered: bool) -> bool:

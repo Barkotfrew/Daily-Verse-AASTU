@@ -8,9 +8,13 @@ from app.cloudflare_core import (
     normalize_signup_value,
     escape_sql_text,
     format_progress_message,
+    format_plan_page,
     format_today_message,
     is_start_command,
+    plan_day_keyboard,
     private_message_parts,
+    plan_page_for_command,
+    plan_page_keyboard,
     registration_required,
     reminder_message,
     scheduled_eat_date,
@@ -48,17 +52,56 @@ class CloudflareCoreTests(unittest.TestCase):
         instant = datetime(2026, 11, 2, 22, 30, tzinfo=timezone.utc)
         self.assertEqual(current_eat_date(instant).isoformat(), "2026-11-03")
 
-    def test_only_start_and_today_are_supported(self) -> None:
+    def test_supported_worker_commands(self) -> None:
         self.assertEqual(supported_command("/start"), "start")
         self.assertEqual(supported_command("/start@ExampleBot payload"), "start")
         self.assertEqual(supported_command("/today"), "today")
         self.assertEqual(supported_command("Today's Reading"), "today")
         self.assertEqual(supported_command("/progress"), "progress")
         self.assertEqual(supported_command("My Progress"), "progress")
-        self.assertIsNone(supported_command("/plan"))
+        self.assertEqual(supported_command("/plan 17"), "plan")
+        self.assertEqual(supported_command("Reading Plan"), "plan")
+        self.assertIsNone(supported_command("/settings"))
         self.assertTrue(is_start_command("/start@ExampleBot register"))
         self.assertFalse(is_start_command("/today"))
         self.assertFalse(is_start_command(None))
+
+    def test_plan_commands_select_the_page_containing_a_day(self) -> None:
+        self.assertEqual(plan_page_for_command("Reading Plan", 231), (1, None))
+        self.assertEqual(plan_page_for_command("/plan 17", 231), (2, None))
+        self.assertEqual(plan_page_for_command("/plan@DailyBot 231", 231), (17, None))
+        self.assertEqual(plan_page_for_command("/plan 232", 231)[0], None)
+        self.assertEqual(plan_page_for_command("/plan nope", 231)[0], None)
+
+    def test_plan_page_format_preserves_exact_rows_and_day_order(self) -> None:
+        rows = (
+            {"plan_day": 1, "ethiopian_date": "ጥቅምት 1", "reading": "ዘፍጥረት 1-3",
+             "gregorian_date": "2026-10-11"},
+            {"plan_day": 2, "ethiopian_date": "ጥቅምት 2", "reading": "ዘፍጥረት 4-7",
+             "gregorian_date": "2026-10-12"},
+        )
+        self.assertEqual(
+            format_plan_page(rows, 1, 2),
+            "Reading Plan · page 1/1 · 2 days\n\n"
+            "Day 1 · ጥቅምት 1 · 2026-10-11\nዘፍጥረት 1-3\n\n"
+            "Day 2 · ጥቅምት 2 · 2026-10-12\nዘፍጥረት 4-7",
+        )
+
+    def test_plan_keyboards_have_bounded_navigation_and_no_empty_rows(self) -> None:
+        first_page = plan_page_keyboard(1, 15)
+        self.assertEqual(first_page["inline_keyboard"][-1][0]["callback_data"], "planpage:2")
+        self.assertTrue(all(first_page["inline_keyboard"]))
+
+        last_page = plan_page_keyboard(2, 15)
+        self.assertEqual(len(last_page["inline_keyboard"]), 2)
+        self.assertEqual(last_page["inline_keyboard"][-1][0]["callback_data"], "planpage:1")
+
+        first_day = plan_day_keyboard(1, 231)
+        self.assertEqual(len(first_day["inline_keyboard"]), 2)
+        self.assertEqual(first_day["inline_keyboard"][0][0]["callback_data"], "plan:2")
+        final_day = plan_day_keyboard(231, 231)
+        self.assertEqual(len(final_day["inline_keyboard"]), 2)
+        self.assertEqual(final_day["inline_keyboard"][-1][0]["callback_data"], "planpage:17")
 
     def test_start_is_registration_and_other_commands_require_it_first(self) -> None:
         self.assertFalse(registration_required("start", False))

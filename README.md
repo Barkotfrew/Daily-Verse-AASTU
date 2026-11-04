@@ -93,7 +93,7 @@ Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare 
 
 Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. The Worker remains an incomplete migration and is not the active bot backend. Do not point Telegram's production webhook at the Worker until signup, commands, callbacks, inline search, progress, and reminder handlers are all migrated and tested.
 
-The Worker currently supports private signup, `/today`, and `/progress`. Progress is read from D1 and returned only in the user's private chat. Other menu commands, callback buttons, inline search, and reminder delivery have not been migrated yet; keep the production webhook on the polling bot.
+The Worker currently supports private signup, `/today`, `/progress`, and paged `/plan` browsing. Plan pages contain 14 days, with inline day and page navigation; `/plan 17` opens the page containing Day 17. Progress is read from D1 and returned only in the user's private chat. Inline search and reminder delivery have not been migrated yet; keep the production webhook on the polling bot.
 
 The D1 base schema is in `cloudflare/worker/migrations/0001_schema.sql`. Later migrations add profile fields: `0003_add_display_name.sql` and `0004_add_academic_profile.sql`. The canonical reading plan is exported to `cloudflare/worker/seed/0002_reading_plan.sql`; regenerate it after an approved plan change with:
 

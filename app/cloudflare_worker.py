@@ -1,8 +1,8 @@
 """Cloudflare Worker entry point for the incremental hosting migration.
 
-Only private /start and /today messages are implemented. Do not set the
-production Telegram webhook until all commands, callbacks, and inline search
-have been migrated and tested.
+Private signup, /today, /progress, and paged /plan browsing are implemented.
+Do not set the production Telegram webhook until all commands, inline search,
+and reminder delivery have been migrated and tested.
 """
 
 import json
@@ -16,7 +16,11 @@ from cloudflare_core import (
     current_eat_date,
     format_progress_message,
     format_today_message,
+    format_plan_page,
     normalize_signup_value,
+    plan_page_for_command,
+    plan_day_keyboard,
+    plan_page_keyboard,
     private_message_parts,
     registration_required,
     supported_command,
@@ -87,9 +91,16 @@ class Default(WorkerEntrypoint):
             except Exception:
                 return Response("Invalid JSON", status=400)
 
+            callback = update.get("callback_query")
+            if isinstance(callback, dict):
+                await self._handle_plan_callback(callback)
+                return Response("OK")
+
             parts = private_message_parts(update)
             if parts is None:
-                return Response("Update type not migrated", status=503)
+                # Ignore update types and non-private chats we do not support.
+                # Returning 503 makes Telegram repeatedly deliver the same update.
+                return Response("OK")
             user_id, chat_id, text = parts
             command = supported_command(text)
             if command is None:
@@ -99,7 +110,15 @@ class Default(WorkerEntrypoint):
                 ).bind(user_id).first()
                 field = next_signup_field(user) if user is not None else None
                 if field is None:
-                    return Response("Command not migrated", status=503)
+                    if user is None:
+                        await self._send_message(chat_id, REGISTRATION_REQUIRED)
+                    else:
+                        await self._send_message(
+                            chat_id,
+                            "Please use the menu buttons or /help to see available options.",
+                            MAIN_MENU,
+                        )
+                    return Response("OK")
                 minimum, maximum, invalid = {
                     "display_name": (2, 64, REGISTRATION_NAME_INVALID),
                     "academic_year": (1, 24, REGISTRATION_YEAR_INVALID),
@@ -172,6 +191,25 @@ class Default(WorkerEntrypoint):
                         "FROM reading_plan WHERE gregorian_date = ?"
                     ).bind(today).first()
                     response_message = format_today_message(entry, current_date)
+                    reply_markup = MAIN_MENU
+                elif command == "plan":
+                    total_row = await self.env.DB.prepare(
+                        "SELECT COUNT(*) AS total FROM reading_plan"
+                    ).first()
+                    total_days = int(total_row["total"]) if total_row else 0
+                    page, error = plan_page_for_command(text, total_days)
+                    if error:
+                        response_message = error
+                        reply_markup = MAIN_MENU
+                    else:
+                        page_size = 14
+                        rows = await self.env.DB.prepare(
+                            "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+                            "FROM reading_plan ORDER BY plan_day LIMIT ? OFFSET ?"
+                        ).bind(page_size, (page - 1) * page_size).all()
+                        entries = tuple(rows.results) if rows else ()
+                        response_message = format_plan_page(entries, page, total_days)
+                        reply_markup = plan_page_keyboard(page, total_days, page_size)
                 else:
                     stats = await self.env.DB.prepare(
                         "SELECT (SELECT COUNT(*) FROM reading_completions "
@@ -190,19 +228,114 @@ class Default(WorkerEntrypoint):
                         int(stats["total"]) if stats else 0,
                         recent_days,
                     )
-                await self._send_message(chat_id, response_message, MAIN_MENU)
+                    reply_markup = MAIN_MENU
+                await self._send_message(chat_id, response_message, reply_markup)
 
             return Response("OK")
 
         return Response("Not found", status=404)
 
+    async def _handle_plan_callback(self, callback):
+        callback_id = callback.get("id")
+        user = callback.get("from") or {}
+        message = callback.get("message") or {}
+        chat = message.get("chat") or {}
+        data = callback.get("data", "")
+        if (
+            not isinstance(callback_id, str)
+            or not isinstance(user.get("id"), int)
+            or not isinstance(chat.get("id"), int)
+            or chat.get("type") != "private"
+            or not isinstance(message.get("message_id"), int)
+        ):
+            if isinstance(callback_id, str):
+                await self._answer_callback(
+                    callback_id, "This action is available in a private chat.", True
+                )
+            return True
+
+        # Telegram requires callback queries to be answered promptly. Do this
+        # before D1 lookups so slow database responses cannot expire the query.
+        await self._answer_callback(callback_id)
+
+        profile = await self.env.DB.prepare(
+            "SELECT display_name, academic_year, department FROM users "
+            "WHERE telegram_user_id = ?"
+        ).bind(user["id"]).first()
+        if profile is None or next_signup_field(profile) is not None:
+            return True
+
+        total_row = await self.env.DB.prepare(
+            "SELECT COUNT(*) AS total FROM reading_plan"
+        ).first()
+        total_days = int(total_row["total"]) if total_row else 0
+        page_size = 14
+        if data.startswith("planpage:"):
+            try:
+                page = int(data.split(":", 1)[1])
+            except ValueError:
+                return True
+            total_pages = (total_days + page_size - 1) // page_size
+            if not 1 <= page <= total_pages:
+                return True
+            rows = await self.env.DB.prepare(
+                "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+                "FROM reading_plan ORDER BY plan_day LIMIT ? OFFSET ?"
+            ).bind(page_size, (page - 1) * page_size).all()
+            entries = tuple(rows.results) if rows else ()
+            text = format_plan_page(entries, page, total_days)
+            keyboard = plan_page_keyboard(page, total_days, page_size)
+        elif data.startswith("plan:"):
+            try:
+                day = int(data.split(":", 1)[1])
+            except ValueError:
+                return True
+            entry = await self.env.DB.prepare(
+                "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+                "FROM reading_plan WHERE plan_day = ?"
+            ).bind(day).first()
+            if entry is None:
+                return True
+            text = (
+                f"Reading Plan · selected day\nDay {entry['plan_day']} · "
+                f"{entry['ethiopian_date']} · {entry['gregorian_date']}\n{entry['reading']}"
+            )
+            keyboard = plan_day_keyboard(day, total_days, page_size)
+        else:
+            return True
+
+        await self._edit_message(
+            chat["id"], message["message_id"], text, keyboard
+        )
+        return True
+
+    async def _answer_callback(self, callback_id, text="", show_alert=False):
+        await self._telegram_request(
+            "answerCallbackQuery",
+            {"callback_query_id": callback_id, "text": text, "show_alert": show_alert},
+        )
+
+    async def _edit_message(self, chat_id, message_id, text, reply_markup):
+        await self._telegram_request(
+            "editMessageText",
+            {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "text": text,
+                "reply_markup": reply_markup,
+            },
+        )
+
     async def _send_message(self, chat_id: int, text: str, reply_markup: dict | None = None):
-        token = getattr(self.env, "TELEGRAM_BOT_TOKEN", "")
-        if not token:
-            raise RuntimeError("Telegram bot token is not configured")
         payload = {"chat_id": chat_id, "text": text}
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
+        await self._telegram_request("sendMessage", payload)
+
+    async def _telegram_request(self, method, payload):
+        token = getattr(self.env, "TELEGRAM_BOT_TOKEN", "")
+        if not token:
+            raise RuntimeError("Telegram bot token is not configured")
         options = to_js(
             {
                 "method": "POST",
@@ -212,7 +345,7 @@ class Default(WorkerEntrypoint):
             dict_converter=Object.fromEntries,
         )
         response = await fetch(
-            f"https://api.telegram.org/bot{token}/sendMessage", options
+            f"https://api.telegram.org/bot{token}/{method}", options
         )
         result = await response.json()
         if not response.ok or not result.get("ok"):
