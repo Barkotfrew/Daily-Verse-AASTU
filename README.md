@@ -16,7 +16,7 @@ From the project directory:
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-bot.txt
 Copy-Item .env.example .env
 ```
 
@@ -134,8 +134,11 @@ Cloudflare's Python Worker toolchain uses `uv` and `pywrangler`. Install uv and 
 
 ```powershell
 winget install --id=astral-sh.uv -e
+$env:UV_PROJECT_ENVIRONMENT = ".venv-pywrangler"
 uv sync --dev
 ```
+
+The Pywrangler CLI environment uses `.venv-pywrangler` so it does not replace the aiogram packages used by the local bot environment. Pywrangler manages a separate `.venv-workers` environment for the Python version selected by the Worker's compatibility date. The bot's pip dependency list is kept separately in `requirements-bot.txt` because Pywrangler expects Worker dependencies to come from `pyproject.toml` and stops when a root `requirements.txt` is present.
 
 For a local Worker preview, create `.dev.vars` from `.dev.vars.example`, set local credentials there, create a D1 database in Cloudflare, and replace the placeholder ID in `wrangler.toml`. Apply the schema and plan seed to local D1, then start the Worker:
 

@@ -1,6 +1,8 @@
 .env
 .dev.vars
 .venv/
+.venv-pywrangler/
+.venv-workers/
 venv/
 __pycache__/
 *.py[cod]
