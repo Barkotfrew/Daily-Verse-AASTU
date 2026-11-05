@@ -129,6 +129,24 @@ def settings_keyboard(reminders_enabled: bool, leaderboard_enabled: bool) -> dic
     return {"inline_keyboard": [
         [{"text": reminder_label, "callback_data": "reminders:toggle"}],
         [{"text": leaderboard_label, "callback_data": "leaderboard:toggle"}],
+        [{"text": "Edit my details", "callback_data": "profile:edit"}],
+        [{"text": "Delete my account", "callback_data": "account:delete"}],
+    ]}
+
+
+def profile_edit_keyboard() -> dict[str, Any]:
+    return {"inline_keyboard": [
+        [{"text": "Edit name", "callback_data": "profile:field:display_name"}],
+        [{"text": "Edit year of study", "callback_data": "profile:field:academic_year"}],
+        [{"text": "Edit department", "callback_data": "profile:field:department"}],
+        [{"text": "Cancel", "callback_data": "profile:cancel"}],
+    ]}
+
+
+def account_delete_keyboard() -> dict[str, Any]:
+    return {"inline_keyboard": [
+        [{"text": "Confirm deletion", "callback_data": "account:confirm"}],
+        [{"text": "Cancel", "callback_data": "account:cancel"}],
     ]}
 
 
@@ -223,6 +241,8 @@ def supported_command(text: str) -> str | None:
         return "settings"
     if command == "/plan" or text.strip() == "Reading Plan":
         return "plan"
+    if command == "/help" or text.strip() == "Help":
+        return "help"
     return None
 
 
@@ -297,7 +317,7 @@ def plan_day_keyboard(day: int, total_days: int, page_size: int = 14) -> dict[st
 
 def registration_required(command: str, registered: bool) -> bool:
     """Require a prior /start registration before serving other commands."""
-    return command != "start" and not registered
+    return command not in {"start", "help"} and not registered
 
 
 def format_today_message(entry: dict[str, Any] | None, current_date: date) -> str:

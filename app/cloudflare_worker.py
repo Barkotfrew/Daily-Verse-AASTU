@@ -42,6 +42,8 @@ from cloudflare_core import (
     reminders_settings_message,
     leaderboard_settings_message,
     settings_keyboard,
+    profile_edit_keyboard,
+    account_delete_keyboard,
     normalize_signup_value,
     plan_page_for_command,
     plan_day_keyboard,
@@ -67,6 +69,20 @@ REGISTRATION_YEAR_PROMPT = (
 REGISTRATION_DEPARTMENT_PROMPT = "What is your department?"
 REGISTRATION_YEAR_INVALID = "Please enter your year of study, such as 2 or 2nd year."
 REGISTRATION_DEPARTMENT_INVALID = "Please enter a department name between 2 and 80 characters."
+PROFILE_EDIT_PROMPTS = {
+    "display_name": "Send the name you want Daily Verse to use (2–64 characters).",
+    "academic_year": "Send your year of study (for example, 2 or 2nd year).",
+    "department": "Send your department name (2–80 characters).",
+}
+PROFILE_EDIT_INVALID = {
+    "display_name": "Please send a name using 2 to 64 characters.",
+    "academic_year": "Please send your year of study, such as 2 or 2nd year.",
+    "department": "Please send a department name between 2 and 80 characters.",
+}
+DELETE_ACCOUNT_PROMPT = (
+    "Delete your Daily Verse account? This also deletes your personal reading progress "
+    "and reminder settings. You can register again later with /start."
+)
 
 
 def next_signup_field(user):
@@ -85,6 +101,20 @@ def signup_prompt(field):
         "academic_year": REGISTRATION_YEAR_PROMPT,
         "department": REGISTRATION_DEPARTMENT_PROMPT,
     }.get(field, REGISTRATION_NAME_PROMPT)
+
+
+def format_worker_settings(settings):
+    if settings is None:
+        return "Settings are unavailable. Please try again."
+    return (
+        "Your details\n"
+        f"Name: {settings['display_name']}\n"
+        f"Year: {settings['academic_year']}\n"
+        f"Department: {settings['department']}\n\n"
+        + reminders_settings_message(bool(settings["reminders_enabled"]))
+        + "\n\n"
+        + leaderboard_settings_message(bool(settings["leaderboard_opt_in"]))
+    )
 
 
 MAIN_MENU = {
@@ -265,6 +295,36 @@ class Default(WorkerEntrypoint):
                 # Returning 503 makes Telegram repeatedly deliver the same update.
                 return Response("OK")
             user_id, chat_id, text = parts
+            pending = await self.env.DB.prepare(
+                "SELECT pending_profile_field FROM users WHERE telegram_user_id = ?"
+            ).bind(user_id).first()
+            pending_field = pending["pending_profile_field"] if pending else None
+            if pending_field:
+                if text.strip().lower() in {"/cancel", "cancel"}:
+                    await self.env.DB.prepare(
+                        "UPDATE users SET pending_profile_field = NULL WHERE telegram_user_id = ?"
+                    ).bind(user_id).run()
+                    await self._send_message(
+                        chat_id, "Edit cancelled. Your details were not changed.", MAIN_MENU
+                    )
+                    return Response("OK")
+                minimum, maximum = {
+                    "display_name": (2, 64),
+                    "academic_year": (1, 24),
+                    "department": (2, 80),
+                }[pending_field]
+                value = normalize_signup_value(text, minimum, maximum)
+                if value is None:
+                    await self._send_message(chat_id, PROFILE_EDIT_INVALID[pending_field])
+                else:
+                    await self.env.DB.prepare(
+                        f"UPDATE users SET {pending_field} = ?, pending_profile_field = NULL "
+                        "WHERE telegram_user_id = ?"
+                    ).bind(value, user_id).run()
+                    await self._send_message(
+                        chat_id, "Your details have been updated.", MAIN_MENU
+                    )
+                return Response("OK")
             command = supported_command(text)
             if command is None:
                 user = await self.env.DB.prepare(
@@ -386,20 +446,28 @@ class Default(WorkerEntrypoint):
                         reply_markup = plan_page_keyboard(page, total_days, page_size)
                 elif command == "settings":
                     settings = await self.env.DB.prepare(
-                        "SELECT reminders_enabled, leaderboard_opt_in FROM users "
+                        "SELECT display_name, academic_year, department, reminders_enabled, "
+                        "leaderboard_opt_in FROM users "
                         "WHERE telegram_user_id = ?"
                     ).bind(user_id).first()
                     enabled = bool(settings["reminders_enabled"]) if settings else False
                     leaderboard_enabled = bool(settings["leaderboard_opt_in"]) if settings else False
-                    response_message = (
-                        reminders_settings_message(enabled) + "\n\n"
-                        + leaderboard_settings_message(leaderboard_enabled)
-                    )
+                    response_message = format_worker_settings(settings)
                     reply_markup = settings_keyboard(enabled, leaderboard_enabled)
                 elif command == "leaderboard":
                     result = await self.env.DB.prepare(LEADERBOARD_QUERY).all()
                     rows = tuple(result.results) if result else ()
                     response_message = format_leaderboard_message(rows)
+                    reply_markup = MAIN_MENU
+                elif command == "help":
+                    response_message = (
+                        "Use /today to see today's assigned reading, /plan to browse "
+                        "the full plan, or /plan 17 to open the page containing Day 17. "
+                        "Open a plan day to read its chapters and mark it complete. "
+                        "Use /progress to see your reading record and streak, "
+                        "/leaderboard to view readers who opted in, and /settings "
+                        "to manage reminders and leaderboard privacy."
+                    )
                     reply_markup = MAIN_MENU
                 else:
                     stats = await self.env.DB.prepare(
@@ -477,10 +545,69 @@ class Default(WorkerEntrypoint):
         await self._answer_callback(callback_id)
 
         profile = await self.env.DB.prepare(
-            "SELECT display_name, academic_year, department, reminders_enabled FROM users "
+            "SELECT display_name, academic_year, department, reminders_enabled, "
+            "leaderboard_opt_in, pending_profile_field FROM users "
             "WHERE telegram_user_id = ?"
         ).bind(user["id"]).first()
         if profile is None or next_signup_field(profile) is not None:
+            return True
+
+        if data == "profile:edit":
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                "Which detail would you like to update?", profile_edit_keyboard(),
+            )
+            return True
+
+        if data.startswith("profile:field:"):
+            field = data.rsplit(":", 1)[-1]
+            if field not in PROFILE_EDIT_PROMPTS:
+                return True
+            await self.env.DB.prepare(
+                "UPDATE users SET pending_profile_field = ? WHERE telegram_user_id = ?"
+            ).bind(field, user["id"]).run()
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                PROFILE_EDIT_PROMPTS[field] + "\nSend /cancel to stop.",
+                {"inline_keyboard": [[{"text": "Cancel", "callback_data": "profile:cancel"}]]},
+            )
+            return True
+
+        if data == "profile:cancel":
+            await self.env.DB.prepare(
+                "UPDATE users SET pending_profile_field = NULL WHERE telegram_user_id = ?"
+            ).bind(user["id"]).run()
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                "Edit cancelled. Your details were not changed.", MAIN_MENU,
+            )
+            return True
+
+        if data == "account:delete":
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                DELETE_ACCOUNT_PROMPT,
+                account_delete_keyboard(),
+            )
+            return True
+
+        if data == "account:cancel":
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                "Account deletion cancelled. Your account and progress are unchanged.",
+                MAIN_MENU,
+            )
+            return True
+
+        if data == "account:confirm":
+            await self.env.DB.prepare(
+                "DELETE FROM users WHERE telegram_user_id = ?"
+            ).bind(user["id"]).run()
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                "Your account and personal records have been deleted. Send /start to register again.",
+                {"inline_keyboard": []},
+            )
             return True
 
         if data == "reminders:toggle":
@@ -489,15 +616,15 @@ class Default(WorkerEntrypoint):
                 "WHERE telegram_user_id = ?"
             ).bind(user["id"]).run()
             settings = await self.env.DB.prepare(
-                "SELECT reminders_enabled, leaderboard_opt_in FROM users "
+                "SELECT display_name, academic_year, department, reminders_enabled, "
+                "leaderboard_opt_in FROM users "
                 "WHERE telegram_user_id = ?"
             ).bind(user["id"]).first()
             enabled = bool(settings["reminders_enabled"]) if settings else False
             leaderboard_enabled = bool(settings["leaderboard_opt_in"]) if settings else False
             await self._edit_message(
                 chat["id"], message["message_id"],
-                reminders_settings_message(enabled) + "\n\n"
-                + leaderboard_settings_message(leaderboard_enabled),
+                format_worker_settings(settings),
                 settings_keyboard(enabled, leaderboard_enabled),
             )
             return True
@@ -508,15 +635,15 @@ class Default(WorkerEntrypoint):
                 "WHERE telegram_user_id = ?"
             ).bind(user["id"]).run()
             settings = await self.env.DB.prepare(
-                "SELECT reminders_enabled, leaderboard_opt_in FROM users "
+                "SELECT display_name, academic_year, department, reminders_enabled, "
+                "leaderboard_opt_in FROM users "
                 "WHERE telegram_user_id = ?"
             ).bind(user["id"]).first()
             reminders_on = bool(settings["reminders_enabled"]) if settings else False
             leaderboard_on = bool(settings["leaderboard_opt_in"]) if settings else False
             await self._edit_message(
                 chat["id"], message["message_id"],
-                reminders_settings_message(reminders_on) + "\n\n"
-                + leaderboard_settings_message(leaderboard_on),
+                format_worker_settings(settings),
                 settings_keyboard(reminders_on, leaderboard_on),
             )
             return True
