@@ -6,6 +6,7 @@ webhook on the polling bot until all remaining commands and reminders are tested
 """
 
 import json
+from datetime import date
 from urllib.parse import urlparse
 
 from workers import Response, WorkerEntrypoint, fetch
@@ -15,6 +16,7 @@ from pyodide.ffi import to_js
 from app.bible import JsonBibleRepository
 from app.inline_search import parse_chapter_start_parameter, search_inline
 from app.references import BOOKS, ReferenceParseError, parse_reference
+from app.streaks import streak_counts, streak_progress_text
 from cloudflare_core import (
     current_eat_date,
     completion_button,
@@ -413,10 +415,37 @@ class Default(WorkerEntrypoint):
                     recent_days = tuple(
                         row["plan_day"] for row in history_rows.results
                     ) if history_rows else ()
+                    all_rows = await self.env.DB.prepare(
+                        "SELECT plan_day FROM reading_completions "
+                        "WHERE telegram_user_id = ? ORDER BY plan_day"
+                    ).bind(user_id).all()
+                    completed_days = tuple(
+                        int(row["plan_day"]) for row in all_rows.results
+                    ) if all_rows else ()
+                    scheduled_today = await self.env.DB.prepare(
+                        "SELECT plan_day FROM reading_plan WHERE gregorian_date = ?"
+                    ).bind(today).first()
+                    if scheduled_today:
+                        current_plan_day = int(scheduled_today["plan_day"])
+                    else:
+                        latest_plan_day = await self.env.DB.prepare(
+                            "SELECT plan_day, gregorian_date FROM reading_plan "
+                            "WHERE gregorian_date < ? ORDER BY plan_day DESC LIMIT 1"
+                        ).bind(today).first()
+                        current_plan_day = (
+                            int(latest_plan_day["plan_day"])
+                            + (current_date - date.fromisoformat(latest_plan_day["gregorian_date"])).days
+                            if latest_plan_day
+                            else 0
+                        )
+                    current_streak, best_streak = streak_counts(
+                        completed_days, current_plan_day
+                    )
                     response_message = format_progress_message(
                         int(stats["completed"]) if stats else 0,
                         int(stats["total"]) if stats else 0,
                         recent_days,
+                        streak=streak_progress_text(current_streak, best_streak),
                     )
                     reply_markup = MAIN_MENU
                 await self._send_message(chat_id, response_message, reply_markup)

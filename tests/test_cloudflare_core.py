@@ -172,6 +172,11 @@ class CloudflareCoreTests(unittest.TestCase):
             "My Progress\n0 of 0 readings completed (0.0%).\n"
             "Recent completed days: None yet",
         )
+        streak = format_progress_message(
+            3, 231, (3, 2, 1), streak="◆  READING STREAK\n3 days in a row\nBest · 3 days"
+        )
+        self.assertIn("My Progress\n◆  READING STREAK", streak)
+        self.assertIn("Best · 3 days\n\n3 of 231", streak)
 
     def test_leaderboard_message_shows_only_the_consented_fields(self) -> None:
         self.assertEqual(

@@ -297,12 +297,18 @@ def format_today_message(entry: dict[str, Any] | None, current_date: date) -> st
     )
 
 
-def format_progress_message(completed: int, total: int, recent_days: tuple[int, ...]) -> str:
+def format_progress_message(
+    completed: int,
+    total: int,
+    recent_days: tuple[int, ...],
+    streak: str | None = None,
+) -> str:
     """Format a user's own private completion summary."""
     percentage = completed / total * 100 if total else 0
     history = ", ".join(str(day) for day in recent_days) or "None yet"
+    streak_section = f"\n{streak}\n" if streak else ""
     return (
-        f"My Progress\n{completed} of {total} readings completed "
+        f"My Progress{streak_section}\n{completed} of {total} readings completed "
         f"({percentage:.1f}%).\nRecent completed days: {history}"
     )
 
