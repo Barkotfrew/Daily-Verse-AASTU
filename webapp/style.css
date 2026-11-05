@@ -41,7 +41,7 @@ button { cursor: pointer; transition: color 150ms ease, background-color 150ms e
 button:disabled { cursor: not-allowed; opacity: .45; }
 button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--muted); outline-offset: 3px; }
 .shell {
-  width: min(100% - 48px, 640px);
+  width: min(100% - 24px, 640px);
   margin: 0 auto;
   padding: max(32px, env(safe-area-inset-top)) 0 20px;
 }
@@ -322,7 +322,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 }
 .chapter-ornament::before, .chapter-ornament::after { width: 52px; height: 1px; background: var(--border); content: ""; }
 .chapter-verses { display: grid; gap: 4px; }
-.verse-row { display: flex; align-items: flex-start; gap: 4px; padding: 12px clamp(8px, 3vw, 12px); border-radius: 12px; transition: background-color 150ms ease; }
+.verse-row { display: flex; align-items: flex-start; gap: 4px; padding: 12px clamp(4px, 1.5vw, 8px); border-radius: 12px; transition: background-color 150ms ease; }
 .verse-row.is-selected { background: var(--surface); }
 .verse-select { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: clamp(18px, 5vw, 20px) minmax(0, 1fr); align-items: start; gap: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; }
 .verse-number {
@@ -384,7 +384,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .font-controls .toolbar-icon { width: 34px; height: 34px; min-height: 34px; }
 .font-controls span { min-width: 23px; color: var(--muted); font: 500 14px "Noto Sans Ethiopic", sans-serif; text-align: center; }
 @media (max-width: 380px) {
-  .shell { width: min(100% - 36px, 640px); }
+  .shell { width: min(100% - 16px, 640px); }
   .chapter-tabs { gap: 6px; }
   .chapter-tab { flex-basis: 106px; padding: 0 7px; }
   .chapter-tab-select { font-size: 12px; }
