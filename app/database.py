@@ -24,7 +24,9 @@ def initialize_database(database_path: str | Path) -> None:
                     academic_year TEXT,
                     department TEXT,
                     reminders_enabled INTEGER NOT NULL DEFAULT 1
-                        CHECK (reminders_enabled IN (0, 1))
+                        CHECK (reminders_enabled IN (0, 1)),
+                    leaderboard_opt_in INTEGER NOT NULL DEFAULT 0
+                        CHECK (leaderboard_opt_in IN (0, 1))
                 )
                 """
             )
@@ -37,6 +39,11 @@ def initialize_database(database_path: str | Path) -> None:
                 connection.execute("ALTER TABLE users ADD COLUMN academic_year TEXT")
             if "department" not in columns:
                 connection.execute("ALTER TABLE users ADD COLUMN department TEXT")
+            if "leaderboard_opt_in" not in columns:
+                connection.execute(
+                    "ALTER TABLE users ADD COLUMN leaderboard_opt_in INTEGER NOT NULL DEFAULT 0 "
+                    "CHECK (leaderboard_opt_in IN (0, 1))"
+                )
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS reading_completions (
@@ -281,6 +288,51 @@ def completed_days(database_path: str | Path, telegram_user_id: int) -> tuple[in
             (telegram_user_id,),
         ).fetchall()
     return tuple(row[0] for row in rows)
+
+
+def set_leaderboard_opt_in(
+    database_path: str | Path, telegram_user_id: int, enabled: bool
+) -> None:
+    """Set the user's explicit consent to appear on the private-chat leaderboard."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE users SET leaderboard_opt_in = ? WHERE telegram_user_id = ?",
+                (int(enabled), telegram_user_id),
+            )
+
+
+def leaderboard_opt_in(database_path: str | Path, telegram_user_id: int) -> bool:
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT leaderboard_opt_in FROM users WHERE telegram_user_id = ?",
+            (telegram_user_id,),
+        ).fetchone()
+    return bool(row[0]) if row else False
+
+
+def leaderboard_entries(
+    database_path: str | Path, limit: int = 10
+) -> tuple[tuple[int, str, int], ...]:
+    """Return opted-in readers only, ordered by completions and then chosen name."""
+    if limit < 1:
+        raise ValueError("limit must be positive")
+    with closing(sqlite3.connect(database_path)) as connection:
+        rows = connection.execute(
+            """SELECT u.telegram_user_id, u.display_name, COUNT(c.plan_day) AS total
+               FROM users AS u
+               LEFT JOIN reading_completions AS c
+                 ON c.telegram_user_id = u.telegram_user_id
+               WHERE u.leaderboard_opt_in = 1
+                 AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
+                 AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
+                 AND u.department IS NOT NULL AND trim(u.department) != ''
+               GROUP BY u.telegram_user_id, u.display_name
+               ORDER BY total DESC, u.display_name COLLATE NOCASE, u.telegram_user_id
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return tuple((int(row[0]), str(row[1]), int(row[2])) for row in rows)
 
 
 def prepare_reminder_deliveries(database_path: str | Path, reminder_date: str, plan_day: int) -> None:

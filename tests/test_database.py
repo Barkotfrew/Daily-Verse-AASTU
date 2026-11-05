@@ -12,6 +12,8 @@ from app.database import (
     display_name,
     due_reminder_deliveries,
     initialize_database,
+    leaderboard_entries,
+    leaderboard_opt_in,
     mark_reminder_sent,
     mark_read,
     profile_details,
@@ -20,6 +22,7 @@ from app.database import (
     register_user,
     save_display_name,
     save_signup_field,
+    set_leaderboard_opt_in,
     update_profile_field,
     set_reminders_enabled,
     user_is_registered,
@@ -44,7 +47,7 @@ class DatabaseInitializationTests(unittest.TestCase):
             self.assertTrue(
                 {
                     "telegram_user_id", "created_at", "reminders_enabled", "display_name",
-                    "academic_year", "department",
+                    "academic_year", "department", "leaderboard_opt_in",
                 } <= columns
             )
 
@@ -62,6 +65,7 @@ class DatabaseInitializationTests(unittest.TestCase):
             with closing(sqlite3.connect(database_path)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
             self.assertTrue({"display_name", "academic_year", "department"} <= columns)
+            self.assertIn("leaderboard_opt_in", columns)
 
     def test_registration_completion_and_reminder_settings_are_per_user(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -149,6 +153,28 @@ class DatabaseInitializationTests(unittest.TestCase):
                 ),
                 (),
             )
+
+    def test_leaderboard_is_explicit_opt_in_sorted_and_limited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "daily.sqlite3"
+            initialize_database(database_path)
+            for user_id, name, count in ((10, "Zara", 2), (11, "Abel", 2), (12, "Hidden", 4)):
+                register_user(database_path, user_id)
+                save_display_name(database_path, user_id, name)
+                save_signup_field(database_path, user_id, "year", "2")
+                save_signup_field(database_path, user_id, "department", "ECS")
+                for day in range(1, count + 1):
+                    mark_read(database_path, user_id, day)
+            self.assertFalse(leaderboard_opt_in(database_path, 10))
+            set_leaderboard_opt_in(database_path, 10, True)
+            set_leaderboard_opt_in(database_path, 11, True)
+            self.assertEqual(
+                leaderboard_entries(database_path),
+                ((11, "Abel", 2), (10, "Zara", 2)),
+            )
+            self.assertEqual(leaderboard_entries(database_path, limit=1), ((11, "Abel", 2),))
+            set_leaderboard_opt_in(database_path, 10, False)
+            self.assertEqual(leaderboard_entries(database_path), ((11, "Abel", 2),))
 
 
 if __name__ == "__main__":

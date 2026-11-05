@@ -1,7 +1,7 @@
 """Telegram commands, menu buttons, and per-user callbacks."""
 
 from pathlib import Path
-from datetime import time
+from datetime import time, timedelta
 from urllib.parse import urlencode
 
 from aiogram import F, Router
@@ -29,7 +29,10 @@ from app.database import (
     reminders_enabled,
     register_user,
     profile_details,
+    leaderboard_entries,
+    leaderboard_opt_in,
     signup_stage,
+    set_leaderboard_opt_in,
     set_reminders_enabled,
     user_is_registered,
     update_profile_field,
@@ -49,6 +52,7 @@ from app.messages import (
 )
 from app.keyboards import MAIN_MENU
 from app.registration import RegistrationGate
+from app.streaks import streak_counts, streak_progress_text
 from app.bible import JsonBibleRepository, format_chapter_messages
 from app.inline_search import parse_chapter_start_parameter, search_inline
 from app.reading_plan import ReadingPlan
@@ -68,10 +72,14 @@ class ProfileEdit(StatesGroup):
     value = State()
 
 
-def _settings_keyboard(enabled: bool) -> InlineKeyboardMarkup:
+def _settings_keyboard(enabled: bool, leaderboard_enabled: bool) -> InlineKeyboardMarkup:
     label = "Turn reminders off" if enabled else "Turn reminders on"
+    leaderboard_label = (
+        "Leave leaderboard" if leaderboard_enabled else "Join leaderboard"
+    )
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
+        [InlineKeyboardButton(text=leaderboard_label, callback_data="toggle_leaderboard")],
         [InlineKeyboardButton(text="Edit my details", callback_data="profile_edit")],
         [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
     ])
@@ -86,14 +94,27 @@ def _profile_edit_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def _settings_text(database_path: Path, user_id: int, enabled: bool, delivery_note: str) -> str:
+def _settings_text(
+    database_path: Path,
+    user_id: int,
+    enabled: bool,
+    leaderboard_enabled: bool,
+    delivery_note: str,
+) -> str:
     profile = profile_details(database_path, user_id) or {}
     return (
         f"Daily reminders are {'on' if enabled else 'off'}. {delivery_note}\n\n"
         "Your details\n"
         f"Name: {profile.get('name') or 'Not set'}\n"
         f"Year: {profile.get('year') or 'Not set'}\n"
-        f"Department: {profile.get('department') or 'Not set'}"
+        f"Department: {profile.get('department') or 'Not set'}\n\n"
+        "Leaderboard\n"
+        + (
+            "You appear by your chosen name and completed-reading count. "
+            "The same list is shown to everyone who opens it."
+            if leaderboard_enabled
+            else "You are not listed. Join to share your chosen name and completed-reading count."
+        )
     )
 
 async def _answer_callback(callback: CallbackQuery, *args: object, **kwargs: object) -> None:
@@ -447,10 +468,42 @@ def build_router(
         days = completed_days(database_path, message.from_user.id)
         percentage = (len(days) / plan.total_days * 100) if plan.total_days else 0
         history = ", ".join(str(day) for day in days[-10:]) or "None yet"
+        today = eat_date()
+        current_entry = entry_for_date(plan, today)
+        if current_entry:
+            current_plan_day = current_entry.day
+        elif today < plan.entries[0].gregorian_date:
+            current_plan_day = 0
+        elif today <= plan.entries[-1].gregorian_date + timedelta(days=1):
+            current_plan_day = plan.final_day
+        else:
+            current_plan_day = plan.final_day + 2
+        current_streak, best_streak = streak_counts(days, current_plan_day)
         await message.answer(
-            f"My Progress\n{len(days)} of {plan.total_days} readings completed "
+            f"My Progress\n{streak_progress_text(current_streak, best_streak)}\n\n"
+            f"{len(days)} of {plan.total_days} readings completed "
             f"({percentage:.1f}%).\nRecent completed days: {history}"
         )
+
+    @router.message(Command("leaderboard"))
+    @router.message(F.text == "Leaderboard")
+    async def leaderboard(message: Message) -> None:
+        if message.chat.type != "private":
+            await message.answer("Open Daily Verse in a private chat to view the leaderboard.")
+            return
+        rows = leaderboard_entries(database_path)
+        if not rows:
+            await message.answer(
+                "Reading leaderboard\n\nNo readers have joined yet. "
+                "Join from Settings to appear here."
+            )
+            return
+        lines = ["Reading leaderboard", "Opted-in readers · completed readings", ""]
+        lines.extend(
+            f"{rank:02d}  {name}  ·  {count}"
+            for rank, (_user_id, name, count) in enumerate(rows, start=1)
+        )
+        await message.answer("\n".join(lines))
 
     @router.message(Command("settings"))
     @router.message(F.text == "Settings")
@@ -466,14 +519,15 @@ def build_router(
             message.chat.id if message.chat.type == "private" else None,
         )
         enabled = reminders_enabled(database_path, message.from_user.id)
+        opted_in = leaderboard_opt_in(database_path, message.from_user.id)
         delivery_note = (
             f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )
         await message.answer(
-            _settings_text(database_path, message.from_user.id, enabled, delivery_note),
-            reply_markup=_settings_keyboard(enabled),
+            _settings_text(database_path, message.from_user.id, enabled, opted_in, delivery_note),
+            reply_markup=_settings_keyboard(enabled, opted_in),
         )
 
     @router.callback_query(F.data == "toggle_reminders")
@@ -487,6 +541,7 @@ def build_router(
         register_user(database_path, callback.from_user.id, callback.message.chat.id)
         enabled = not reminders_enabled(database_path, callback.from_user.id)
         set_reminders_enabled(database_path, callback.from_user.id, enabled)
+        opted_in = leaderboard_opt_in(database_path, callback.from_user.id)
         await _answer_callback(callback, "Reminders turned on." if enabled else "Reminders turned off.")
         if callback.message:
             delivery_note = (
@@ -495,9 +550,35 @@ def build_router(
                 else "Delivery is paused until the hosting scheduler is verified and enabled."
             )
             await callback.message.edit_text(
-                _settings_text(database_path, callback.from_user.id, enabled, delivery_note),
-                reply_markup=_settings_keyboard(enabled),
+                _settings_text(database_path, callback.from_user.id, enabled, opted_in, delivery_note),
+                reply_markup=_settings_keyboard(enabled, opted_in),
             )
+
+    @router.callback_query(F.data == "toggle_leaderboard")
+    async def toggle_leaderboard(callback: CallbackQuery) -> None:
+        if callback.from_user is None:
+            await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
+            return
+        if callback.message is None or callback.message.chat.type != "private":
+            await _answer_callback(callback, "Use this option in a private chat.", show_alert=True)
+            return
+        register_user(database_path, callback.from_user.id, callback.message.chat.id)
+        opted_in = not leaderboard_opt_in(database_path, callback.from_user.id)
+        set_leaderboard_opt_in(database_path, callback.from_user.id, opted_in)
+        await _answer_callback(
+            callback,
+            "You joined the leaderboard." if opted_in else "You left the leaderboard.",
+        )
+        enabled = reminders_enabled(database_path, callback.from_user.id)
+        delivery_note = (
+            f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
+            if reminder_scheduler_enabled
+            else "Delivery is paused until the hosting scheduler is verified and enabled."
+        )
+        await callback.message.edit_text(
+            _settings_text(database_path, callback.from_user.id, enabled, opted_in, delivery_note),
+            reply_markup=_settings_keyboard(enabled, opted_in),
+        )
 
     @router.callback_query(F.data.startswith("profile_edit"))
     async def choose_profile_field(callback: CallbackQuery, state: FSMContext) -> None:
