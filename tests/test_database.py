@@ -170,11 +170,15 @@ class DatabaseInitializationTests(unittest.TestCase):
             set_leaderboard_opt_in(database_path, 11, True)
             self.assertEqual(
                 leaderboard_entries(database_path),
-                ((11, "Abel", 2), (10, "Zara", 2)),
+                ((11, "Abel", "2", 2), (10, "Zara", "2", 2)),
             )
-            self.assertEqual(leaderboard_entries(database_path, limit=1), ((11, "Abel", 2),))
+            self.assertEqual(
+                leaderboard_entries(database_path, limit=1), ((11, "Abel", "2", 2),)
+            )
             set_leaderboard_opt_in(database_path, 10, False)
-            self.assertEqual(leaderboard_entries(database_path), ((11, "Abel", 2),))
+            self.assertEqual(
+                leaderboard_entries(database_path), ((11, "Abel", "2", 2),)
+            )
 
 
 if __name__ == "__main__":

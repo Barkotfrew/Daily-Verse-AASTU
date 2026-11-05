@@ -313,13 +313,14 @@ def leaderboard_opt_in(database_path: str | Path, telegram_user_id: int) -> bool
 
 def leaderboard_entries(
     database_path: str | Path, limit: int = 10
-) -> tuple[tuple[int, str, int], ...]:
+) -> tuple[tuple[int, str, str, int], ...]:
     """Return opted-in readers only, ordered by completions and then chosen name."""
     if limit < 1:
         raise ValueError("limit must be positive")
     with closing(sqlite3.connect(database_path)) as connection:
         rows = connection.execute(
-            """SELECT u.telegram_user_id, u.display_name, COUNT(c.plan_day) AS total
+            """SELECT u.telegram_user_id, u.display_name, u.academic_year,
+                      COUNT(c.plan_day) AS total
                FROM users AS u
                LEFT JOIN reading_completions AS c
                  ON c.telegram_user_id = u.telegram_user_id
@@ -327,12 +328,12 @@ def leaderboard_entries(
                  AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
                  AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
                  AND u.department IS NOT NULL AND trim(u.department) != ''
-               GROUP BY u.telegram_user_id, u.display_name
+               GROUP BY u.telegram_user_id, u.display_name, u.academic_year
                ORDER BY total DESC, u.display_name COLLATE NOCASE, u.telegram_user_id
                LIMIT ?""",
             (limit,),
         ).fetchall()
-    return tuple((int(row[0]), str(row[1]), int(row[2])) for row in rows)
+    return tuple((int(row[0]), str(row[1]), str(row[2]), int(row[3])) for row in rows)
 
 
 def prepare_reminder_deliveries(database_path: str | Path, reminder_date: str, plan_day: int) -> None:

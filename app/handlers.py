@@ -110,10 +110,10 @@ def _settings_text(
         f"Department: {profile.get('department') or 'Not set'}\n\n"
         "Leaderboard\n"
         + (
-            "You appear by your chosen name and completed-reading count. "
+            "Your chosen name, study year, and completed-reading count appear. "
             "The same list is shown to everyone who opens it."
             if leaderboard_enabled
-            else "You are not listed. Join to share your chosen name and completed-reading count."
+            else "You are not listed. Join to share your chosen name, study year, and completed-reading count."
         )
     )
 
@@ -500,8 +500,8 @@ def build_router(
             return
         lines = ["Reading leaderboard", "Opted-in readers · completed readings", ""]
         lines.extend(
-            f"{rank:02d}  {name}  ·  {count}"
-            for rank, (_user_id, name, count) in enumerate(rows, start=1)
+            f"{rank:02d}  {name}  ·  Year {year}  ·  {count} readings"
+            for rank, (_user_id, name, year, count) in enumerate(rows, start=1)
         )
         await message.answer("\n".join(lines))
 
