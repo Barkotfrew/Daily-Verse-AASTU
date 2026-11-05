@@ -62,6 +62,8 @@
   const telegramUserId = telegram?.initDataUnsafe?.user?.id;
   const localStorageScope = Number.isSafeInteger(telegramUserId) ? `user-${telegramUserId}` : "browser";
   const bookmarkStorageKey = `daily-verse-bookmarks-${localStorageScope}`;
+  const cloudBookmarkPrefix = "dv-bookmark-";
+  const cloudBookmarkSyncKey = "dv-bookmark-sync-version";
   const readChapterStorageKey = `daily-verse-read-chapters-${localStorageScope}`;
   const telegramCloudStorage = telegram?.CloudStorage;
   const fontSizeStorageKey = `daily-verse-font-size-${localStorageScope}`;
@@ -69,6 +71,8 @@
   let readChapters = [];
   let verseFontSize = 18;
   const cloudReadSaveQueues = new Map();
+  const cloudBookmarkSaveQueues = new Map();
+  const bookmarkChangesDuringLoad = new Map();
 
   function cloudGetItem(key) {
     if (!telegramCloudStorage?.getItem) return Promise.resolve({ supported: false, value: null });
@@ -102,6 +106,142 @@
         resolve(false);
       }
     });
+  }
+
+  function cloudRemoveItem(key) {
+    if (!telegramCloudStorage?.removeItem) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 2000);
+      try {
+        telegramCloudStorage.removeItem(key, (error, removed) => {
+          clearTimeout(timeout);
+          resolve(!error && removed !== false);
+        });
+      } catch {
+        clearTimeout(timeout);
+        resolve(false);
+      }
+    });
+  }
+
+  function cloudGetKeys() {
+    if (!telegramCloudStorage?.getKeys) return Promise.resolve({ supported: false, keys: [] });
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ supported: false, keys: [] }), 2000);
+      try {
+        telegramCloudStorage.getKeys((error, keys) => {
+          clearTimeout(timeout);
+          resolve(error || !Array.isArray(keys)
+            ? { supported: false, keys: [] }
+            : { supported: true, keys });
+        });
+      } catch {
+        clearTimeout(timeout);
+        resolve({ supported: false, keys: [] });
+      }
+    });
+  }
+
+  function cloudGetItems(keys) {
+    if (!telegramCloudStorage?.getItems) {
+      return Promise.all(keys.map(async (key) => [key, await cloudGetItem(key)]))
+        .then((items) => ({
+          supported: items.every(([, result]) => result.supported),
+          values: Object.fromEntries(items.map(([key, result]) => [key, result.value])),
+        }));
+    }
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve({ supported: false, values: {} }), 2000);
+      try {
+        telegramCloudStorage.getItems(keys, (error, values) => {
+          clearTimeout(timeout);
+          resolve(error || !values || typeof values !== "object"
+            ? { supported: false, values: {} }
+            : { supported: true, values });
+        });
+      } catch {
+        clearTimeout(timeout);
+        resolve({ supported: false, values: {} });
+      }
+    });
+  }
+
+  function cloudBookmarkKey(bookmark) {
+    return `${cloudBookmarkPrefix}${bookmark.bookId}-${bookmark.chapter}-${bookmark.verse}`;
+  }
+
+  function normalizeBookmark(bookmark) {
+    if (!bookmark || typeof bookmark !== "object") return null;
+    const { bookId, chapter, verse, english, amharic, verseLabel } = bookmark;
+    if (
+      typeof bookId !== "string" || !/^[A-Z0-9]{2,4}$/.test(bookId)
+      || !Number.isInteger(chapter) || chapter < 1 || chapter > 150
+      || !Number.isInteger(verse) || verse < 1 || verse > 200
+      || typeof english !== "string" || typeof amharic !== "string"
+      || typeof verseLabel !== "string"
+    ) return null;
+    return {
+      key: verseKey(bookId, chapter, verse), bookId, chapter, verse,
+      english: english.slice(0, 80), amharic: amharic.slice(0, 80),
+      verseLabel: verseLabel.slice(0, 20),
+    };
+  }
+
+  function queueCloudBookmarkSave(key, bookmark) {
+    const cloudKey = `${cloudBookmarkPrefix}${key.replace(/:/g, "-")}`;
+    const previous = cloudBookmarkSaveQueues.get(cloudKey) ?? Promise.resolve();
+    const pending = previous.catch(() => false).then(() => bookmark
+      ? cloudSetItem(cloudKey, JSON.stringify(bookmark))
+      : cloudRemoveItem(cloudKey));
+    cloudBookmarkSaveQueues.set(cloudKey, pending);
+    return pending;
+  }
+
+  async function loadCloudBookmarks() {
+    const listed = await cloudGetKeys();
+    if (!listed.supported) return;
+    const marker = await cloudGetItem(cloudBookmarkSyncKey);
+    if (!marker.supported) return;
+    const firstSync = marker.value !== "1";
+    const keys = listed.keys.filter((key) =>
+      typeof key === "string" && key.startsWith(cloudBookmarkPrefix));
+    const loaded = keys.length ? await cloudGetItems(keys) : { supported: true, values: {} };
+    if (!loaded.supported) return;
+
+    const merged = new Map();
+    for (const key of keys) {
+      try {
+        const item = normalizeBookmark(JSON.parse(loaded.values[key] ?? "null"));
+        if (item && cloudBookmarkKey(item) === key) merged.set(item.key, item);
+      } catch { /* Ignore corrupt cloud values and preserve usable bookmarks. */ }
+    }
+
+    if (firstSync) {
+      for (const item of bookmarks) {
+        const valid = normalizeBookmark(item);
+        if (valid) merged.set(valid.key, valid);
+      }
+    }
+    for (const [key, changed] of bookmarkChangesDuringLoad) {
+      if (changed) merged.set(key, changed);
+      else merged.delete(key);
+    }
+
+    bookmarks = [...merged.values()];
+    persistBookmarks();
+    renderBookmarks();
+    updateVisibleBookmarks();
+
+    if (firstSync) {
+      const saves = bookmarks.map((item) => queueCloudBookmarkSave(item.key, item));
+      const saved = await Promise.all(saves);
+      if (saved.every(Boolean)) await cloudSetItem(cloudBookmarkSyncKey, "1");
+    } else {
+      for (const [key, changed] of bookmarkChangesDuringLoad) {
+        queueCloudBookmarkSave(key, changed);
+      }
+    }
+    bookmarkChangesDuringLoad.clear();
   }
   try {
     const storedBookmarks = JSON.parse(localStorage.getItem(bookmarkStorageKey) ?? "[]");
@@ -176,8 +316,13 @@
     return `${bookId}:${chapter}:${verse}`;
   }
 
-  function persistBookmarks() {
+  function persistBookmarks(changedKey = null) {
     try { localStorage.setItem(bookmarkStorageKey, JSON.stringify(bookmarks)); } catch { /* Keep this session usable if storage is unavailable. */ }
+    if (changedKey) {
+      const changed = bookmarks.find((bookmark) => bookmark.key === changedKey) ?? null;
+      bookmarkChangesDuringLoad.set(changedKey, changed);
+      queueCloudBookmarkSave(changedKey, changed);
+    }
   }
 
   function renderBookmarks() {
@@ -212,7 +357,7 @@
       remove.textContent = "Remove";
       remove.addEventListener("click", () => {
         bookmarks = bookmarks.filter((bookmark) => bookmark.key !== item.key);
-        persistBookmarks();
+        persistBookmarks(item.key);
         renderBookmarks();
         updateVisibleBookmarks();
       });
@@ -284,7 +429,7 @@
           verseLabel: row.start === row.end ? String(row.start) : `${row.start}–${row.end}`,
         });
       }
-      persistBookmarks();
+      persistBookmarks(key);
       renderBookmarks();
       updateVisibleBookmarks();
     });
@@ -440,6 +585,7 @@
   }
 
   renderBookmarks();
+  void loadCloudBookmarks();
 
   async function loadChapterAsset(passage) {
     const asset = new URL(
