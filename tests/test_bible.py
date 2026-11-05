@@ -132,6 +132,39 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIn("ይበሉም ዘንድ", chapter.verses[-2].text)
         self.assertIn("ለዳዊትና", chapter.verses[-1].text)
 
+    def test_supplied_first_samuel_endings_are_complete(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter_13 = source.get_chapter("1SA", 13)
+        chapter_21 = source.get_chapter("1SA", 21)
+
+        self.assertTrue(chapter_13.complete)
+        self.assertEqual(chapter_13.verses[-1].label, "22-23")
+        self.assertIn("ወደ ማክማስ መተላለፊያ", chapter_13.verses[-1].text)
+        self.assertTrue(chapter_21.complete)
+        self.assertEqual(chapter_21.verses[-1].label, "14-15")
+        self.assertIn("ወደ ቤቴ ይገባልን", chapter_21.verses[-1].text)
+
+    def test_other_pasted_chapter_endings_are_complete(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        expected_last_labels = {
+            ("EZR", 7): "27-28",
+            ("SNG", 6): "13",
+            ("ISA", 19): "24-25",
+            ("JER", 9): "25-26",
+            ("JER", 11): "23",
+            ("JER", 36): "32",
+            ("EZK", 16): "62-63",
+            ("HAG", 1): "14-15",
+        }
+
+        for (book_id, number), label in expected_last_labels.items():
+            with self.subTest(book_id=book_id, chapter=number):
+                chapter = source.get_chapter(book_id, number)
+                self.assertTrue(chapter.complete)
+                self.assertEqual(chapter.verses[-1].label, label)
+
     def test_job_41_has_26_verses_and_is_complete(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
