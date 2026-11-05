@@ -19,14 +19,16 @@ from cloudflare_core import (
     current_eat_date,
     completion_button,
     format_progress_message,
+    format_leaderboard_message,
     format_today_message,
     format_plan_page,
     mini_app_chapter_asset_url,
     mini_app_reader_keyboard,
     mini_app_reader_url,
     reminder_message,
-    reminders_keyboard,
     reminders_settings_message,
+    leaderboard_settings_message,
+    settings_keyboard,
     normalize_signup_value,
     plan_page_for_command,
     plan_day_keyboard,
@@ -42,10 +44,13 @@ from messages import REGISTRATION_COMPLETE, REGISTRATION_EXISTING, REGISTRATION_
 
 REGISTRATION_NAME_PROMPT = (
     "What is your name?\n"
-    "It may appear on a future reading leaderboard."
+    "Your name and study year appear on the leaderboard only if you join from Settings."
 )
 REGISTRATION_NAME_INVALID = "Please enter your name using 2 to 64 characters."
-REGISTRATION_YEAR_PROMPT = "What year of study are you in? For example: 2nd year."
+REGISTRATION_YEAR_PROMPT = (
+    "What year of study are you in? For example: 2nd year. "
+    "It appears on the leaderboard only if you choose to join."
+)
 REGISTRATION_DEPARTMENT_PROMPT = "What is your department?"
 REGISTRATION_YEAR_INVALID = "Please enter your year of study, such as 2 or 2nd year."
 REGISTRATION_DEPARTMENT_INVALID = "Please enter a department name between 2 and 80 characters."
@@ -72,7 +77,8 @@ def signup_prompt(field):
 MAIN_MENU = {
     "keyboard": [
         [{"text": "Today's Reading"}, {"text": "Reading Plan"}],
-        [{"text": "My Progress"}, {"text": "Settings"}],
+        [{"text": "My Progress"}, {"text": "Leaderboard"}],
+        [{"text": "Settings"}],
         [{"text": "Help"}],
     ],
     "resize_keyboard": True,
@@ -367,11 +373,33 @@ class Default(WorkerEntrypoint):
                         reply_markup = plan_page_keyboard(page, total_days, page_size)
                 elif command == "settings":
                     settings = await self.env.DB.prepare(
-                        "SELECT reminders_enabled FROM users WHERE telegram_user_id = ?"
+                        "SELECT reminders_enabled, leaderboard_opt_in FROM users "
+                        "WHERE telegram_user_id = ?"
                     ).bind(user_id).first()
                     enabled = bool(settings["reminders_enabled"]) if settings else False
-                    response_message = reminders_settings_message(enabled)
-                    reply_markup = reminders_keyboard(enabled)
+                    leaderboard_enabled = bool(settings["leaderboard_opt_in"]) if settings else False
+                    response_message = (
+                        reminders_settings_message(enabled) + "\n\n"
+                        + leaderboard_settings_message(leaderboard_enabled)
+                    )
+                    reply_markup = settings_keyboard(enabled, leaderboard_enabled)
+                elif command == "leaderboard":
+                    result = await self.env.DB.prepare(
+                        "SELECT u.display_name, u.academic_year, "
+                        "COUNT(c.plan_day) AS completed "
+                        "FROM users AS u LEFT JOIN reading_completions AS c "
+                        "ON c.telegram_user_id = u.telegram_user_id "
+                        "WHERE u.leaderboard_opt_in = 1 "
+                        "AND u.display_name IS NOT NULL AND trim(u.display_name) != '' "
+                        "AND u.academic_year IS NOT NULL AND trim(u.academic_year) != '' "
+                        "AND u.department IS NOT NULL AND trim(u.department) != '' "
+                        "GROUP BY u.telegram_user_id, u.display_name, u.academic_year "
+                        "ORDER BY completed DESC, u.display_name COLLATE NOCASE, "
+                        "u.telegram_user_id LIMIT 10"
+                    ).all()
+                    rows = tuple(result.results) if result else ()
+                    response_message = format_leaderboard_message(rows)
+                    reply_markup = MAIN_MENU
                 else:
                     stats = await self.env.DB.prepare(
                         "SELECT (SELECT COUNT(*) FROM reading_completions "
@@ -433,12 +461,35 @@ class Default(WorkerEntrypoint):
                 "WHERE telegram_user_id = ?"
             ).bind(user["id"]).run()
             settings = await self.env.DB.prepare(
-                "SELECT reminders_enabled FROM users WHERE telegram_user_id = ?"
+                "SELECT reminders_enabled, leaderboard_opt_in FROM users "
+                "WHERE telegram_user_id = ?"
             ).bind(user["id"]).first()
             enabled = bool(settings["reminders_enabled"]) if settings else False
+            leaderboard_enabled = bool(settings["leaderboard_opt_in"]) if settings else False
             await self._edit_message(
                 chat["id"], message["message_id"],
-                reminders_settings_message(enabled), reminders_keyboard(enabled),
+                reminders_settings_message(enabled) + "\n\n"
+                + leaderboard_settings_message(leaderboard_enabled),
+                settings_keyboard(enabled, leaderboard_enabled),
+            )
+            return True
+
+        if data == "leaderboard:toggle":
+            await self.env.DB.prepare(
+                "UPDATE users SET leaderboard_opt_in = 1 - leaderboard_opt_in "
+                "WHERE telegram_user_id = ?"
+            ).bind(user["id"]).run()
+            settings = await self.env.DB.prepare(
+                "SELECT reminders_enabled, leaderboard_opt_in FROM users "
+                "WHERE telegram_user_id = ?"
+            ).bind(user["id"]).first()
+            reminders_on = bool(settings["reminders_enabled"]) if settings else False
+            leaderboard_on = bool(settings["leaderboard_opt_in"]) if settings else False
+            await self._edit_message(
+                chat["id"], message["message_id"],
+                reminders_settings_message(reminders_on) + "\n\n"
+                + leaderboard_settings_message(leaderboard_on),
+                settings_keyboard(reminders_on, leaderboard_on),
             )
             return True
 

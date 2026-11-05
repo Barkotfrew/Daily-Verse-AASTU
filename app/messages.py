@@ -11,12 +11,15 @@ REGISTRATION_REQUIRED = "Please send /start first to create your account."
 
 REGISTRATION_NAME_PROMPT = (
     "What is your name?\n"
-    "It may appear on a future reading leaderboard."
+    "Your name and study year appear on the leaderboard only if you join from Settings."
 )
 
 REGISTRATION_NAME_INVALID = "Please enter your name using 2 to 64 characters."
 
-REGISTRATION_YEAR_PROMPT = "What year of study are you in? For example: 2nd year."
+REGISTRATION_YEAR_PROMPT = (
+    "What year of study are you in? For example: 2nd year. "
+    "It appears on the leaderboard only if you choose to join."
+)
 REGISTRATION_YEAR_INVALID = "Please enter your year of study, such as 2 or 2nd year."
 
 REGISTRATION_DEPARTMENT_PROMPT = "What is your department?"

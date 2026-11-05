@@ -96,6 +96,38 @@ def reminders_settings_message(enabled: bool) -> str:
     )
 
 
+def leaderboard_settings_message(enabled: bool) -> str:
+    consent = (
+        "Your chosen name, study year, and completed-reading count appear on the shared list."
+        if enabled
+        else "You are not listed. Join to share your chosen name, study year, and completed-reading count."
+    )
+    return f"Leaderboard\n{consent}\nThe same list is shown to everyone who opens it."
+
+
+def settings_keyboard(reminders_enabled: bool, leaderboard_enabled: bool) -> dict[str, Any]:
+    """Settings actions, with leaderboard visibility controlled by explicit opt-in."""
+    reminder_label = "Turn reminders off" if reminders_enabled else "Turn reminders on"
+    leaderboard_label = "Leave leaderboard" if leaderboard_enabled else "Join leaderboard"
+    return {"inline_keyboard": [
+        [{"text": reminder_label, "callback_data": "reminders:toggle"}],
+        [{"text": leaderboard_label, "callback_data": "leaderboard:toggle"}],
+    ]}
+
+
+def format_leaderboard_message(rows: tuple[dict[str, Any], ...]) -> str:
+    """Render stable leaderboard rows with only consented public fields."""
+    if not rows:
+        return "Reading leaderboard\n\nNo readers have joined yet. Join from Settings to appear here."
+    lines = ["Reading leaderboard", "Opted-in readers · completed readings", ""]
+    lines.extend(
+        f"{rank:02d}  {row['display_name']}  ·  Year {row['academic_year']}  ·  "
+        f"{row['completed']} readings"
+        for rank, row in enumerate(rows, start=1)
+    )
+    return "\n".join(lines)
+
+
 def verify_webhook_secret(expected: str, provided: str | None) -> bool:
     """Constant-time compare for Telegram's configured webhook secret header."""
     return bool(expected and provided and hmac.compare_digest(expected, provided))
@@ -168,6 +200,8 @@ def supported_command(text: str) -> str | None:
         return "today"
     if command == "/progress" or text.strip() == "My Progress":
         return "progress"
+    if command == "/leaderboard" or text.strip() == "Leaderboard":
+        return "leaderboard"
     if command == "/settings" or text.strip() == "Settings":
         return "settings"
     if command == "/plan" or text.strip() == "Reading Plan":

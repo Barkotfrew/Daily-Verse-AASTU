@@ -8,6 +8,7 @@ from app.cloudflare_core import (
     normalize_signup_value,
     escape_sql_text,
     format_progress_message,
+    format_leaderboard_message,
     mini_app_chapter_asset_url,
     mini_app_reader_keyboard,
     mini_app_reader_url,
@@ -22,6 +23,8 @@ from app.cloudflare_core import (
     reminder_message,
     reminders_keyboard,
     reminders_settings_message,
+    leaderboard_settings_message,
+    settings_keyboard,
     today_keyboard,
     scheduled_eat_date,
     supported_command,
@@ -65,6 +68,8 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertEqual(supported_command("Today's Reading"), "today")
         self.assertEqual(supported_command("/progress"), "progress")
         self.assertEqual(supported_command("My Progress"), "progress")
+        self.assertEqual(supported_command("/leaderboard"), "leaderboard")
+        self.assertEqual(supported_command("Leaderboard"), "leaderboard")
         self.assertEqual(supported_command("/plan 17"), "plan")
         self.assertEqual(supported_command("Reading Plan"), "plan")
         self.assertEqual(supported_command("/settings"), "settings")
@@ -166,6 +171,30 @@ class CloudflareCoreTests(unittest.TestCase):
             format_progress_message(0, 0, ()),
             "My Progress\n0 of 0 readings completed (0.0%).\n"
             "Recent completed days: None yet",
+        )
+
+    def test_leaderboard_message_shows_only_the_consented_fields(self) -> None:
+        self.assertEqual(
+            format_leaderboard_message(({
+                "display_name": "Barki",
+                "academic_year": "4th",
+                "completed": 12,
+            },)),
+            "Reading leaderboard\nOpted-in readers · completed readings\n\n"
+            "01  Barki  ·  Year 4th  ·  12 readings",
+        )
+        self.assertIn("No readers have joined", format_leaderboard_message(()))
+
+    def test_leaderboard_settings_requires_explicit_opt_in_and_can_be_reversed(self) -> None:
+        self.assertIn("You are not listed", leaderboard_settings_message(False))
+        self.assertIn("study year", leaderboard_settings_message(True))
+        self.assertEqual(
+            settings_keyboard(True, False)["inline_keyboard"][1][0],
+            {"text": "Join leaderboard", "callback_data": "leaderboard:toggle"},
+        )
+        self.assertEqual(
+            settings_keyboard(True, True)["inline_keyboard"][1][0]["text"],
+            "Leave leaderboard",
         )
 
     def test_only_private_text_messages_are_extracted(self) -> None:
