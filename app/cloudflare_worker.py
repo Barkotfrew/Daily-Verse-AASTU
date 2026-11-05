@@ -2,7 +2,8 @@
 
 Private signup, reading-plan browsing, assigned-reading Mini App links, and
 bilingual Amharic inline reference search are implemented. Keep the production
-webhook on the polling bot until all remaining commands and reminders are tested.
+webhook on the polling bot; reminder Queue and Cron bindings remain disabled
+until their Cloudflare runtime flow is deliberately validated.
 """
 
 import json
