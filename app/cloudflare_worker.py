@@ -18,6 +18,7 @@ from app.inline_search import parse_chapter_start_parameter, search_inline
 from app.references import BOOKS, ReferenceParseError, parse_reference
 from app.streaks import streak_counts, streak_progress_text
 from cloudflare_core import (
+    LEADERBOARD_QUERY,
     current_eat_date,
     completion_button,
     format_progress_message,
@@ -386,19 +387,7 @@ class Default(WorkerEntrypoint):
                     )
                     reply_markup = settings_keyboard(enabled, leaderboard_enabled)
                 elif command == "leaderboard":
-                    result = await self.env.DB.prepare(
-                        "SELECT u.display_name, u.academic_year, "
-                        "COUNT(c.plan_day) AS completed "
-                        "FROM users AS u LEFT JOIN reading_completions AS c "
-                        "ON c.telegram_user_id = u.telegram_user_id "
-                        "WHERE u.leaderboard_opt_in = 1 "
-                        "AND u.display_name IS NOT NULL AND trim(u.display_name) != '' "
-                        "AND u.academic_year IS NOT NULL AND trim(u.academic_year) != '' "
-                        "AND u.department IS NOT NULL AND trim(u.department) != '' "
-                        "GROUP BY u.telegram_user_id, u.display_name, u.academic_year "
-                        "ORDER BY completed DESC, u.display_name COLLATE NOCASE, "
-                        "u.telegram_user_id LIMIT 10"
-                    ).all()
+                    result = await self.env.DB.prepare(LEADERBOARD_QUERY).all()
                     rows = tuple(result.results) if result else ()
                     response_message = format_leaderboard_message(rows)
                     reply_markup = MAIN_MENU

@@ -9,6 +9,18 @@ from app.references import BOOKS
 
 EAT = timezone(timedelta(hours=3), name="EAT")
 
+LEADERBOARD_QUERY = """SELECT u.display_name, u.academic_year,
+       COUNT(c.plan_day) AS completed
+FROM users AS u LEFT JOIN reading_completions AS c
+  ON c.telegram_user_id = u.telegram_user_id
+WHERE u.leaderboard_opt_in = 1
+  AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
+  AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
+  AND u.department IS NOT NULL AND trim(u.department) != ''
+GROUP BY u.telegram_user_id, u.display_name, u.academic_year
+ORDER BY completed DESC, u.display_name COLLATE NOCASE, u.telegram_user_id
+LIMIT 10"""
+
 
 def mini_app_reader_url(
     base_url: str,
