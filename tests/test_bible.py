@@ -79,6 +79,29 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIn("እንስሳ አርቢዎች ነን።", chapter.verses[-1].text)
         self.assertNotIn("q ቍ@", chapter.verses[-1].text)
 
+    def test_deuteronomy_13_correction_fills_verse_16_and_combined_17_18(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter = source.get_chapter("DEU", 13)
+
+        self.assertTrue(chapter.complete)
+        self.assertEqual(chapter.verses[-2].label, "16")
+        self.assertEqual(chapter.verses[-1].label, "17-18")
+        self.assertIn("ወደ አደባባይዋ", chapter.verses[-2].text)
+        self.assertIn("አይንጠልጠልብህ", chapter.verses[-1].text)
+
+    def test_jonah_1_uses_supplied_verse_17_text(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter = source.get_chapter("JON", 1)
+
+        self.assertTrue(chapter.complete)
+        self.assertEqual(chapter.verses[-1].label, "17")
+        self.assertEqual(
+            chapter.verses[-1].text,
+            "ሰዎችም እግዚአብሔርን እጅግ ፈሩ፥ ለእግዚአብሔርም መሥዋዕትን አቀረቡ፥ ስእለትንም ተሳሉ።",
+        )
+
     def test_job_41_has_26_verses_and_is_complete(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
