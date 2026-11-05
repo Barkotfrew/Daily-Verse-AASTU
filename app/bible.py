@@ -90,13 +90,25 @@ class JsonBibleRepository:
             number = correction.get("chapter")
             rows = correction.get("verses")
             complete = correction.get("complete")
+            replace_from = correction.get("replace_from")
+            truncate_after = correction.get("truncate_after")
             if (
                 not isinstance(book_id, str)
                 or not isinstance(number, int)
                 or isinstance(number, bool)
                 or not isinstance(rows, list)
-                or not rows
                 or not isinstance(complete, bool)
+                or (replace_from is not None and (
+                    not isinstance(replace_from, int)
+                    or isinstance(replace_from, bool)
+                    or replace_from < 1
+                ))
+                or (truncate_after is not None and (
+                    not isinstance(truncate_after, int)
+                    or isinstance(truncate_after, bool)
+                    or truncate_after < 1
+                ))
+                or (not rows and replace_from is None and truncate_after is None)
             ):
                 raise BibleDataError("Bible chapter correction has invalid fields")
             existing = self.get_chapter(book_id, number)
@@ -123,7 +135,23 @@ class JsonBibleRepository:
                     raise BibleDataError(f"Invalid corrected verse in {book_id} {number}")
                 additions.append(Verse(start, end, text))
 
-            verses = tuple(sorted((*existing.verses, *additions), key=lambda verse: verse.start))
+            if replace_from is not None:
+                retained = tuple(verse for verse in existing.verses if verse.end < replace_from)
+                if (retained and retained[-1].end != replace_from - 1) or (
+                    not retained and replace_from != 1
+                ):
+                    raise BibleDataError(
+                        f"Replacement does not begin at a verse boundary in {book_id} {number}"
+                    )
+                verses = tuple(sorted((*retained, *additions), key=lambda verse: verse.start))
+            else:
+                verses = tuple(sorted((*existing.verses, *additions), key=lambda verse: verse.start))
+            if truncate_after is not None:
+                verses = tuple(verse for verse in verses if verse.end <= truncate_after)
+                if not verses or verses[-1].end != truncate_after:
+                    raise BibleDataError(
+                        f"Truncation does not end at a verse boundary in {book_id} {number}"
+                    )
             for previous, current in zip(verses, verses[1:]):
                 if current.start <= previous.end:
                     raise BibleDataError(f"Overlapping correction in {book_id} {number}")

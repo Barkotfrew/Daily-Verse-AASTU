@@ -90,17 +90,47 @@ class BibleRepositoryTests(unittest.TestCase):
         self.assertIn("ወደ አደባባይዋ", chapter.verses[-2].text)
         self.assertIn("አይንጠልጠልብህ", chapter.verses[-1].text)
 
-    def test_jonah_1_uses_supplied_verse_17_text(self) -> None:
+    def test_supplied_chapter_endings_match_source_verse_numbers(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
         source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
-        chapter = source.get_chapter("JON", 1)
+        jonah = source.get_chapter("JON", 1)
+        hosea = source.get_chapter("HOS", 1)
+        hosea_eleven = source.get_chapter("HOS", 11)
+
+        self.assertTrue(jonah.complete)
+        self.assertEqual(jonah.verses[-1].label, "16")
+        self.assertTrue(hosea.complete)
+        self.assertEqual(hosea.verses[-1].label, "9")
+        self.assertTrue(hosea_eleven.complete)
+        self.assertEqual(hosea_eleven.verses[-1].label, "11")
+
+    def test_supplied_joshua_and_judges_text_is_complete_with_correct_ranges(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        joshua_four = source.get_chapter("JOS", 4)
+        joshua_eighteen = source.get_chapter("JOS", 18)
+        judges_twenty = source.get_chapter("JDG", 20)
+
+        self.assertTrue(joshua_four.complete)
+        self.assertEqual(joshua_four.verses[-1].label, "24")
+        self.assertEqual(joshua_four.verses[-4].label, "21")
+        self.assertTrue(joshua_eighteen.complete)
+        self.assertEqual(joshua_eighteen.verses[-2].label, "26")
+        self.assertEqual(joshua_eighteen.verses[-1].label, "27-28")
+        self.assertTrue(judges_twenty.complete)
+        self.assertEqual(judges_twenty.verses[-1].label, "48")
+        self.assertEqual(judges_twenty.verses[11].label, "12-13")
+
+    def test_second_samuel_17_has_supplied_verses_28_and_29(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        source = JsonBibleRepository(project_root / "data" / "bible" / "source" / "amharic_bible.json")
+        chapter = source.get_chapter("2SA", 17)
 
         self.assertTrue(chapter.complete)
-        self.assertEqual(chapter.verses[-1].label, "17")
-        self.assertEqual(
-            chapter.verses[-1].text,
-            "ሰዎችም እግዚአብሔርን እጅግ ፈሩ፥ ለእግዚአብሔርም መሥዋዕትን አቀረቡ፥ ስእለትንም ተሳሉ።",
-        )
+        self.assertEqual(chapter.verses[-2].label, "28")
+        self.assertEqual(chapter.verses[-1].label, "29")
+        self.assertIn("ይበሉም ዘንድ", chapter.verses[-2].text)
+        self.assertIn("ለዳዊትና", chapter.verses[-1].text)
 
     def test_job_41_has_26_verses_and_is_complete(self) -> None:
         project_root = Path(__file__).resolve().parents[1]
