@@ -3,8 +3,14 @@
 from dataclasses import dataclass
 import re
 
-from app.bible import JsonBibleRepository, Verse
-from app.references import BOOKS, ReferenceParseError, parse_reference
+try:
+    from app.bible import JsonBibleRepository, Verse
+    from app.references import BOOKS, ReferenceParseError, parse_reference
+except ModuleNotFoundError as exc:
+    if exc.name != "app":
+        raise
+    from bible import JsonBibleRepository, Verse
+    from references import BOOKS, ReferenceParseError, parse_reference
 
 MAX_INLINE_RESULTS = 50
 MAX_VERSE_RANGE = 50

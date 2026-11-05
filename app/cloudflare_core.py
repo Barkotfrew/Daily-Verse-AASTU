@@ -5,7 +5,12 @@ import hmac
 from typing import Any
 from urllib.parse import urlencode
 
-from app.references import BOOKS
+try:
+    from app.references import BOOKS
+except ModuleNotFoundError as exc:
+    if exc.name != "app":
+        raise
+    from references import BOOKS
 
 EAT = timezone(timedelta(hours=3), name="EAT")
 

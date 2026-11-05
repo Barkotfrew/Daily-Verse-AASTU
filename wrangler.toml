@@ -2,7 +2,6 @@ name = "daily-verse-aastu-bot"
 main = "app/cloudflare_worker.py"
 compatibility_date = "2026-11-03"
 compatibility_flags = ["python_workers"]
-migrations_dir = "cloudflare/worker/migrations"
 
 [vars]
 MINI_APP_URL = "https://daily-verse-aastu.pages.dev"
@@ -11,3 +10,4 @@ MINI_APP_URL = "https://daily-verse-aastu.pages.dev"
 binding = "DB"
 database_name = "daily-verse-aastu"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "cloudflare/worker/migrations"

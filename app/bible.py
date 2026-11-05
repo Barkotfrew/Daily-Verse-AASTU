@@ -8,7 +8,12 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
-from app.references import BOOKS
+try:
+    from app.references import BOOKS
+except ModuleNotFoundError as exc:
+    if exc.name != "app":
+        raise
+    from references import BOOKS
 
 
 class BibleDataError(ValueError):

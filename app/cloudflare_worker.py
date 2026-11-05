@@ -13,10 +13,20 @@ from workers import Response, WorkerEntrypoint, fetch
 from js import Object
 from pyodide.ffi import to_js
 
-from app.bible import JsonBibleRepository
-from app.inline_search import parse_chapter_start_parameter, search_inline
-from app.references import BOOKS, ReferenceParseError, parse_reference
-from app.streaks import streak_counts, streak_progress_text
+try:
+    from app.bible import JsonBibleRepository
+    from app.inline_search import parse_chapter_start_parameter, search_inline
+    from app.references import BOOKS, ReferenceParseError, parse_reference
+    from app.streaks import streak_counts, streak_progress_text
+except ModuleNotFoundError as exc:
+    # Pywrangler bundles files beside the configured entry point as flat
+    # modules, so the local `app` package isn't present in that runtime.
+    if exc.name != "app":
+        raise
+    from bible import JsonBibleRepository
+    from inline_search import parse_chapter_start_parameter, search_inline
+    from references import BOOKS, ReferenceParseError, parse_reference
+    from streaks import streak_counts, streak_progress_text
 from cloudflare_core import (
     LEADERBOARD_QUERY,
     current_eat_date,

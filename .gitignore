@@ -3,6 +3,9 @@
 .venv/
 .venv-pywrangler/
 .venv-workers/
+.wrangler/
+python_modules/
+pylock.toml
 venv/
 __pycache__/
 *.py[cod]
