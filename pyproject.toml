@@ -5,5 +5,12 @@ description = "Cloudflare webhook and scheduled backend for Daily Verse"
 requires-python = ">=3.13"
 dependencies = ["workers-runtime-sdk"]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [dependency-groups]
 dev = ["workers-py"]
