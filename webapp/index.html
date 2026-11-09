@@ -46,6 +46,14 @@
           <summary>Bookmarks <span id="bookmark-count">0</span></summary>
           <div id="bookmark-list" class="bookmark-list"></div>
         </details>
+        <details id="reading-journal" class="saved-bookmarks">
+          <summary>Private journal <span id="journal-count">0</span></summary>
+          <div class="journal-panel">
+            <p class="journal-privacy">Saved in this browser profile on this device. Notes are not sent to the bot or shared, and may be lost if browser data is cleared.</p>
+            <button id="journal-new" class="secondary-button journal-new" type="button">Write a reflection</button>
+            <div id="journal-list" class="journal-list"></div>
+          </div>
+        </details>
         <details id="browse-bible" class="browse-bible">
           <summary>Browse Bible</summary>
           <div id="selectors" class="selectors">
@@ -62,6 +70,25 @@
       </section>
 
     </main>
+    <dialog id="journal-dialog" class="journal-dialog" aria-labelledby="journal-dialog-title">
+      <form id="journal-form" class="journal-form" method="dialog">
+        <div class="journal-dialog-heading">
+          <div>
+            <h2 id="journal-dialog-title">A moment to reflect</h2>
+            <p id="journal-context" class="journal-context"></p>
+          </div>
+          <button id="journal-close" class="journal-close" type="button" aria-label="Close journal">×</button>
+        </div>
+        <label for="journal-reflection">Reflection</label>
+        <textarea id="journal-reflection" maxlength="4000" rows="6" placeholder="What stood out to you in this reading?"></textarea>
+        <label for="journal-prayer">Prayer (optional)</label>
+        <textarea id="journal-prayer" maxlength="2000" rows="3" placeholder="Add a private prayer note"></textarea>
+        <div class="journal-form-actions">
+          <button id="journal-cancel" class="secondary-button" type="button">Cancel</button>
+          <button class="primary-button" type="submit">Save privately</button>
+        </div>
+      </form>
+    </dialog>
     <nav class="reader-toolbar" aria-label="Reading controls">
       <div class="reading-progress" aria-hidden="true"><span id="reading-progress-fill"></span></div>
       <div class="toolbar-inner">
@@ -77,6 +104,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           </button>
         </div>
+        <button id="journal-toolbar" class="journal-toolbar-button" type="button" aria-label="Open private journal" title="Open private journal">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h8.5L19 7.25v12A1.75 1.75 0 0 1 17.25 21h-10A1.75 1.75 0 0 1 5.5 19.25v-13A2.5 2.5 0 0 1 8 3.75Z"/><path d="M15 3.75v4h4M9 12h6m-6 3.5h6"/></svg>
+          <span>Journal</span><span id="journal-toolbar-count" class="journal-toolbar-count" hidden></span>
+        </button>
         <button id="next-button" class="toolbar-icon" type="button" aria-label="Next chapter" title="Next chapter" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>

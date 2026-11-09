@@ -54,6 +54,15 @@
   const returnReadingButton = document.querySelector("#return-reading");
   const bookmarkCount = document.querySelector("#bookmark-count");
   const bookmarkList = document.querySelector("#bookmark-list");
+  const journalDetails = document.querySelector("#reading-journal");
+  const journalCount = document.querySelector("#journal-count");
+  const journalToolbarCount = document.querySelector("#journal-toolbar-count");
+  const journalList = document.querySelector("#journal-list");
+  const journalDialog = document.querySelector("#journal-dialog");
+  const journalForm = document.querySelector("#journal-form");
+  const journalContext = document.querySelector("#journal-context");
+  const journalReflection = document.querySelector("#journal-reflection");
+  const journalPrayer = document.querySelector("#journal-prayer");
   const progressFill = document.querySelector("#reading-progress-fill");
   const fontDecrease = document.querySelector("#font-decrease");
   const fontIncrease = document.querySelector("#font-increase");
@@ -62,12 +71,17 @@
   const telegramUserId = telegram?.initDataUnsafe?.user?.id;
   const localStorageScope = Number.isSafeInteger(telegramUserId) ? `user-${telegramUserId}` : "browser";
   const bookmarkStorageKey = `daily-verse-bookmarks-${localStorageScope}`;
+  const journalStorageKey = `daily-verse-journal-${localStorageScope}`;
   const cloudBookmarkPrefix = "dv-bookmark-";
   const cloudBookmarkSyncKey = "dv-bookmark-sync-version";
   const readChapterStorageKey = `daily-verse-read-chapters-${localStorageScope}`;
   const telegramCloudStorage = telegram?.CloudStorage;
   const fontSizeStorageKey = `daily-verse-font-size-${localStorageScope}`;
   let bookmarks = [];
+  let journalEntries = [];
+  let currentPassage = null;
+  let selectedVerse = null;
+  let editingJournalId = null;
   let readChapters = [];
   let verseFontSize = 18;
   const cloudReadSaveQueues = new Map();
@@ -248,6 +262,11 @@
     if (Array.isArray(storedBookmarks)) bookmarks = storedBookmarks;
   } catch { /* Keep bookmarks available in memory if storage is unavailable. */ }
   try {
+    const storedJournal = JSON.parse(localStorage.getItem(journalStorageKey) ?? "[]");
+    if (Array.isArray(storedJournal)) journalEntries = storedJournal.filter((entry) =>
+      entry && typeof entry.id === "string" && typeof entry.reflection === "string");
+  } catch { /* Keep the journal usable for this session if storage is unavailable. */ }
+  try {
     const storedReadChapters = JSON.parse(localStorage.getItem(readChapterStorageKey) ?? "[]");
     if (Array.isArray(storedReadChapters)) readChapters = storedReadChapters;
     const savedSize = Number(localStorage.getItem(fontSizeStorageKey));
@@ -366,6 +385,117 @@
     }
   }
 
+  function persistJournal() {
+    try { localStorage.setItem(journalStorageKey, JSON.stringify(journalEntries)); } catch {
+      setStatus("Could not save the journal on this device. Free up browser storage and try again.", true);
+    }
+  }
+
+  function renderJournal() {
+    journalCount.textContent = String(journalEntries.length);
+    journalToolbarCount.textContent = String(journalEntries.length);
+    journalToolbarCount.hidden = journalEntries.length === 0;
+    journalList.replaceChildren();
+    if (!journalEntries.length) {
+      const empty = document.createElement("p");
+      empty.className = "bookmark-empty";
+      empty.textContent = "Your reflections will appear here.";
+      journalList.append(empty);
+      return;
+    }
+    for (const entry of [...journalEntries].sort((a, b) => b.updatedAt - a.updatedAt)) {
+      const row = document.createElement("article");
+      row.className = "journal-entry";
+      const heading = document.createElement("p");
+      heading.className = "journal-entry-context";
+      heading.textContent = entry.reference;
+      const reflection = document.createElement("p");
+      reflection.className = "journal-entry-text";
+      reflection.textContent = entry.reflection;
+      row.append(heading, reflection);
+      if (entry.verseText) {
+        const verseText = document.createElement("p");
+        verseText.className = "journal-entry-verse";
+        verseText.textContent = `“${entry.verseText}”`;
+        row.append(verseText);
+      }
+      if (entry.prayer) {
+        const prayer = document.createElement("p");
+        prayer.className = "journal-entry-prayer";
+        prayer.textContent = `Prayer · ${entry.prayer}`;
+        row.append(prayer);
+      }
+      const actions = document.createElement("div");
+      actions.className = "journal-entry-actions";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "bookmark-remove";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => openJournal(entry));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "bookmark-remove";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", () => {
+        journalEntries = journalEntries.filter((item) => item.id !== entry.id);
+        persistJournal();
+        renderJournal();
+      });
+      actions.append(edit, remove);
+      row.append(actions);
+      journalList.append(row);
+    }
+  }
+
+  function journalReference() {
+    const verse = selectedVerse;
+    const passage = verse?.passage ?? currentPassage;
+    if (!passage) return currentDay ? `Day ${currentDay}` : "Reading reflection";
+    const bookAndChapter = `${passage.amharic} ${passage.chapter}`;
+    const versePart = verse ? ` · verse ${verse.verseLabel}` : "";
+    const dayPart = currentDay ? ` · Day ${currentDay}` : "";
+    return `${bookAndChapter}${versePart}${dayPart}`;
+  }
+
+  function openJournal(entry = null) {
+    editingJournalId = entry?.id ?? null;
+    journalContext.textContent = entry?.reference ?? journalReference();
+    journalReflection.value = entry?.reflection ?? "";
+    journalPrayer.value = entry?.prayer ?? "";
+    if (typeof journalDialog.showModal === "function") journalDialog.showModal();
+    else journalDialog.setAttribute("open", "");
+    journalReflection.focus();
+  }
+
+  document.querySelector("#journal-new").addEventListener("click", () => openJournal());
+  document.querySelector("#journal-toolbar").addEventListener("click", () => openJournal());
+  document.querySelector("#journal-close").addEventListener("click", () => journalDialog.close());
+  document.querySelector("#journal-cancel").addEventListener("click", () => journalDialog.close());
+  journalForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const reflection = journalReflection.value.trim();
+    const prayer = journalPrayer.value.trim();
+    if (!reflection && !prayer) {
+      journalReflection.focus();
+      return;
+    }
+    const previous = journalEntries.find((entry) => entry.id === editingJournalId);
+    const entry = {
+      id: editingJournalId ?? (window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+      reference: previous?.reference ?? journalReference(),
+      verseText: previous?.verseText ?? selectedVerse?.text?.slice(0, 600) ?? "",
+      reflection: reflection.slice(0, 4000),
+      prayer: prayer.slice(0, 2000),
+      updatedAt: Date.now(),
+    };
+    journalEntries = [entry, ...journalEntries.filter((item) => item.id !== entry.id)];
+    persistJournal();
+    renderJournal();
+    journalDialog.close();
+    journalDetails.open = true;
+  });
+  renderJournal();
+
   function updateVisibleBookmarks() {
     content.querySelectorAll(".verse-bookmark").forEach((button) => {
       const saved = bookmarks.some((item) => item.key === button.dataset.bookmarkKey);
@@ -413,7 +543,15 @@
       if (!wasSelected) {
         verse.classList.add("is-selected");
         select.setAttribute("aria-pressed", "true");
+        selectedVerse = {
+          passage,
+          verseLabel: row.start === row.end ? String(row.start) : `${row.start}–${row.end}`,
+          text: row.text,
+        };
+      } else {
+        selectedVerse = null;
       }
+      if (journalDialog.open) journalContext.textContent = journalReference();
     });
     bookmark.addEventListener("click", () => {
       if (bookmarks.some((item) => item.key === key)) {
@@ -438,6 +576,7 @@
   }
 
   function appendChapter(passage, chapter) {
+    currentPassage = passage;
     const section = document.createElement("section");
     section.className = "chapter-section";
     section.id = `assigned-chapter-${passage.book_id}-${passage.chapter}`;
@@ -604,6 +743,8 @@
     params.set("day", String(dayNumber));
     history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     content.replaceChildren();
+    currentPassage = null;
+    selectedVerse = null;
     currentDay = dayNumber;
     readingDate.hidden = true;
     chapterTabs.hidden = true;
@@ -699,6 +840,8 @@
     progressFill.style.width = "0%";
     returnReadingButton.hidden = currentDay === null;
     content.replaceChildren();
+    currentPassage = null;
+    selectedVerse = null;
     content.classList.remove("assigned-reading");
     setStatus("Loading chapter…");
     openButton.disabled = true;
