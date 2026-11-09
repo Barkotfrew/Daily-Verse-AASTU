@@ -380,11 +380,10 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .reading-progress span { display: block; width: 0; height: 100%; background: var(--muted); transition: width 150ms ease; }
 .toolbar-inner {
   display: grid;
-  width: min(100% - 24px, 640px);
+  width: min(100% - 48px, 640px);
   height: 62px;
-  grid-template-columns: 40px auto auto 40px;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   margin: 0 auto;
 }
 .toolbar-icon {
@@ -403,12 +402,15 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .toolbar-inner > .toolbar-icon:last-child { justify-self: end; }
 .toolbar-icon:hover:not(:disabled) { background: var(--surface); }
 .journal-toolbar-button {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: inline-flex;
-  min-height: 38px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 0 9px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
@@ -430,8 +432,8 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
   .chapter-tab { flex-basis: 106px; padding: 0 7px; }
   .chapter-tab-select { font-size: 12px; }
   .chapter-title { font-size: 28px; }
-  .toolbar-inner { width: min(100% - 16px, 640px); }
-  .journal-toolbar-button { gap: 3px; padding: 0 6px; font-size: 10px; }
+  .toolbar-inner { width: min(100% - 48px, 640px); }
+  .journal-toolbar-button { gap: 3px; padding: 0 7px; font-size: 10px; }
   .font-controls { gap: 0; padding: 0 3px; }
   .font-controls .toolbar-icon { width: 30px; }
 }
