@@ -408,36 +408,25 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .journal-toolbar-button {
   position: absolute;
   top: 0;
-  left: calc(50% + 58px);
-  display: grid;
-  width: 28px;
-  height: 31px;
-  min-height: 31px;
+  left: 0;
+  display: flex;
+  min-width: 54px;
+  min-height: 0;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 50%;
   background: transparent;
   color: var(--foreground);
-  font: 500 11px/1 "Noto Sans Ethiopic", sans-serif;
+  font: 500 9px/1.2 "Noto Sans Ethiopic", sans-serif;
   white-space: nowrap;
 }
-.journal-toolbar-button:hover { border-color: var(--muted); }
+.journal-toolbar-button:hover { color: var(--muted); }
 .journal-toolbar-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
-.journal-toolbar-button span {
-  position: absolute;
-  top: 41px;
-  left: 46px;
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-}
+.journal-toolbar-button span { display: block; }
 .theme-toggle svg, .toolbar-icon svg, .verse-bookmark svg, .chapter-read-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .toolbar-icon svg { width: 18px; height: 18px; }
 .font-controls { display: flex; min-height: 42px; align-items: center; gap: 4px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px; }
@@ -446,8 +435,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 380px) {
   .shell { width: min(100% - 16px, 640px); }
   .topbar { min-height: 112px; }
-  .journal-toolbar-button { left: calc(50% + 46px); width: 24px; height: 25px; min-height: 25px; }
-  .journal-toolbar-button span { top: 33px; left: 28px; min-height: 25px; padding: 0 6px; font-size: 9px; }
+  .journal-toolbar-button { min-width: 48px; gap: 2px; font-size: 8px; }
   .journal-toolbar-button svg { width: 14px; height: 14px; }
   .theme-toggle { width: 36px; height: 36px; min-height: 36px; }
   .brand-logo { width: 88px; height: 25px; }
