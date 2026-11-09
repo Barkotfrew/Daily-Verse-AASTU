@@ -56,9 +56,9 @@
   const bookmarkList = document.querySelector("#bookmark-list");
   const journalDetails = document.querySelector("#reading-journal");
   const journalCount = document.querySelector("#journal-count");
-  const journalToolbarCount = document.querySelector("#journal-toolbar-count");
   const journalList = document.querySelector("#journal-list");
   const journalDialog = document.querySelector("#journal-dialog");
+  const journalSavedDialog = document.querySelector("#journal-saved-dialog");
   const journalForm = document.querySelector("#journal-form");
   const journalContext = document.querySelector("#journal-context");
   const journalReflection = document.querySelector("#journal-reflection");
@@ -393,8 +393,6 @@
 
   function renderJournal() {
     journalCount.textContent = String(journalEntries.length);
-    journalToolbarCount.textContent = String(journalEntries.length);
-    journalToolbarCount.hidden = journalEntries.length === 0;
     journalList.replaceChildren();
     if (!journalEntries.length) {
       const empty = document.createElement("p");
@@ -467,10 +465,21 @@
     journalReflection.focus();
   }
 
+  function showJournalEntries() {
+    journalDetails.open = true;
+    journalDetails.scrollIntoView({ behavior: "smooth", block: "start" });
+    journalDetails.querySelector("summary").focus({ preventScroll: true });
+  }
+
   document.querySelector("#journal-new").addEventListener("click", () => openJournal());
   document.querySelector("#journal-toolbar").addEventListener("click", () => openJournal());
   document.querySelector("#journal-close").addEventListener("click", () => journalDialog.close());
   document.querySelector("#journal-cancel").addEventListener("click", () => journalDialog.close());
+  document.querySelector("#journal-go-back").addEventListener("click", () => journalSavedDialog.close());
+  document.querySelector("#journal-view-entries").addEventListener("click", () => {
+    journalSavedDialog.close();
+    showJournalEntries();
+  });
   journalForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const reflection = journalReflection.value.trim();
@@ -492,7 +501,9 @@
     persistJournal();
     renderJournal();
     journalDialog.close();
-    journalDetails.open = true;
+    journalDetails.open = false;
+    if (typeof journalSavedDialog.showModal === "function") journalSavedDialog.showModal();
+    else journalSavedDialog.setAttribute("open", "");
   });
   renderJournal();
 
