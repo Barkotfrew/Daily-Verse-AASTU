@@ -425,7 +425,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
   color: var(--foreground);
 }
 .journal-toolbar-button:hover { border-color: var(--muted); }
-.journal-toolbar-button svg { width: 19px; height: 19px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.journal-toolbar-button svg { width: 23px; height: 23px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .theme-toggle svg, .toolbar-icon svg, .verse-bookmark svg, .chapter-read-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .toolbar-icon svg { width: 18px; height: 18px; }
 .font-controls { display: flex; min-height: 42px; align-items: center; gap: 4px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px; }
@@ -435,6 +435,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
   .shell { width: min(100% - 16px, 640px); }
   .topbar { min-height: 112px; }
   .journal-toolbar-button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
+  .journal-toolbar-button svg { width: 21px; height: 21px; }
   .theme-toggle { width: 36px; height: 36px; min-height: 36px; }
   .brand-logo { width: 88px; height: 25px; }
   .brand-copy { margin-top: 8px; }
