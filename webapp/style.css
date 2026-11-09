@@ -47,14 +47,12 @@ button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px
 }
 .topbar {
   position: relative;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) 40px;
-  gap: 8px;
-  min-height: 142px;
+  display: flex;
+  min-height: 182px;
+  justify-content: center;
   align-items: flex-start;
 }
 .brand-lockup {
-  grid-column: 2;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -84,14 +82,13 @@ h1 {
   letter-spacing: -.02em;
 }
 .theme-toggle {
-  position: static;
-  grid-column: 3;
+  position: absolute;
+  right: 0;
   top: 0;
   display: grid;
   width: 40px;
   height: 40px;
   min-height: 40px;
-  justify-self: end;
   place-items: center;
   margin: 0;
   padding: 0;
@@ -409,7 +406,9 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .toolbar-inner > .toolbar-icon:last-child { justify-self: end; }
 .toolbar-icon:hover:not(:disabled) { background: var(--surface); }
 .journal-toolbar-button {
-  grid-column: 1;
+  position: absolute;
+  top: 92px;
+  left: 0;
   display: inline-flex;
   width: max-content;
   min-height: 40px;
@@ -434,7 +433,8 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 .font-controls span { min-width: 23px; color: var(--muted); font: 500 14px "Noto Sans Ethiopic", sans-serif; text-align: center; }
 @media (max-width: 380px) {
   .shell { width: min(100% - 16px, 640px); }
-  .topbar { grid-template-columns: max-content minmax(0, 1fr) 36px; gap: 5px; }
+  .topbar { min-height: 164px; }
+  .journal-toolbar-button { top: 80px; }
   .journal-toolbar-button { min-height: 36px; gap: 4px; padding: 0 6px; font-size: 10px; }
   .journal-toolbar-button svg { width: 14px; height: 14px; }
   .theme-toggle { width: 36px; height: 36px; min-height: 36px; }
