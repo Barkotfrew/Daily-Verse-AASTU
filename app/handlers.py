@@ -23,8 +23,11 @@ from aiogram.types import Message
 
 from app.database import (
     completed_days,
+    completed_reading_history,
     delete_user,
     display_name,
+    journal_entry,
+    journal_entries,
     mark_read,
     reminders_enabled,
     register_user,
@@ -34,6 +37,7 @@ from app.database import (
     signup_stage,
     set_leaderboard_opt_in,
     set_reminders_enabled,
+    save_journal_entry,
     user_is_registered,
     update_profile_field,
 )
@@ -70,6 +74,13 @@ from app.readings import (
 
 class ProfileEdit(StatesGroup):
     value = State()
+
+
+class JournalEntryFlow(StatesGroup):
+    day = State()
+    reference = State()
+    reflection = State()
+    prayer = State()
 
 
 def _settings_keyboard(enabled: bool, leaderboard_enabled: bool) -> InlineKeyboardMarkup:
@@ -147,6 +158,12 @@ def _entry_keyboard(day: int, mini_app_url: str, in_private_chat: bool) -> Inlin
             )],
         ]
     )
+
+
+def _journal_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Write a reflection", callback_data="journal:new")
+    ]])
 
 
 def _plan_keyboard(
@@ -467,7 +484,7 @@ def build_router(
             return
         days = completed_days(database_path, message.from_user.id)
         percentage = (len(days) / plan.total_days * 100) if plan.total_days else 0
-        history = ", ".join(str(day) for day in days[-10:]) or "None yet"
+        recent = completed_reading_history(database_path, message.from_user.id, limit=5)
         today = eat_date()
         current_entry = entry_for_date(plan, today)
         if current_entry:
@@ -479,10 +496,190 @@ def build_router(
         else:
             current_plan_day = plan.final_day + 2
         current_streak, best_streak = streak_counts(days, current_plan_day)
+        history_lines = []
+        for day, completed_at in recent:
+            entry = plan.get_day(day)
+            if entry is not None:
+                history_lines.append(
+                    f"Day {day} · {completed_at[:10]} — {entry.reading}"
+                )
+        history_text = "\n".join(history_lines) or "No readings marked complete yet."
         await message.answer(
             f"My Progress\n{streak_progress_text(current_streak, best_streak)}\n\n"
-            f"{len(days)} of {plan.total_days} readings completed "
-            f"({percentage:.1f}%).\nRecent completed days: {history}"
+            f"Reading plan: {len(days)} of {plan.total_days} assigned readings marked complete "
+            f"({percentage:.1f}%).\n\n"
+            "Recent reading plan history\n"
+            "These are plan days you marked complete, not whole-Bible coverage.\n"
+            f"{history_text}"
+        )
+
+    async def send_journal(message: Message) -> None:
+        if message.chat.type != "private":
+            await message.answer("Your journal is private. Open Daily Verse in a private chat to use it.")
+            return
+        if message.from_user is None:
+            return
+        rows = journal_entries(database_path, message.from_user.id, limit=3)
+        if not rows:
+            text = (
+                "My private journal\n\n"
+                "Write a reflection or prayer connected to a day in the reading plan. "
+                "Only you can view these notes; they are never shown on the leaderboard."
+            )
+        else:
+            sections = [
+                "My private journal",
+                "Only you can view these notes; they are never shown on the leaderboard.",
+            ]
+            entry_buttons = []
+            for entry_id, day, reference, reflection, _prayer, created_at in rows:
+                heading = f"Day {day} · {created_at[:10]}"
+                if reference:
+                    heading += f" · {reference}"
+                section = f"{heading}\n{reflection[:350]}"
+                if len(reflection) > 350:
+                    section += "…"
+                sections.append(section)
+                entry_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"Open Day {day} entry", callback_data=f"journal:view:{entry_id}"
+                    )
+                ])
+            text = "\n\n".join(sections)
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=entry_buttons + [[
+                    InlineKeyboardButton(text="Write a reflection", callback_data="journal:new")
+                ]]
+            )
+            await message.answer(text, reply_markup=keyboard)
+            return
+        await message.answer(text, reply_markup=_journal_keyboard())
+
+    @router.message(Command("journal"))
+    @router.message(F.text == "My Journal")
+    async def journal_home(message: Message) -> None:
+        await send_journal(message)
+
+    @router.callback_query(F.data == "journal:new")
+    async def start_journal_entry(callback: CallbackQuery, state: FSMContext) -> None:
+        if callback.from_user is None or callback.message is None:
+            await _answer_callback(callback, "Could not identify your account.", show_alert=True)
+            return
+        if callback.message.chat.type != "private":
+            await _answer_callback(callback, "Your journal is available only in a private chat.", show_alert=True)
+            return
+        await state.clear()
+        await state.set_state(JournalEntryFlow.day)
+        await _answer_callback(callback)
+        await callback.message.answer(
+            "Which reading-plan day is this for? Send a day number, or type today."
+        )
+
+    @router.callback_query(F.data.startswith("journal:view:"))
+    async def view_journal_entry(callback: CallbackQuery) -> None:
+        if callback.from_user is None or callback.message is None:
+            await _answer_callback(callback, "Could not identify your account.", show_alert=True)
+            return
+        if callback.message.chat.type != "private":
+            await _answer_callback(callback, "Journal entries are private.", show_alert=True)
+            return
+        try:
+            entry_id = int((callback.data or "").rsplit(":", 1)[1])
+        except (IndexError, ValueError):
+            await _answer_callback(callback, "That journal entry is unavailable.", show_alert=True)
+            return
+        entry = journal_entry(database_path, callback.from_user.id, entry_id)
+        if entry is None:
+            await _answer_callback(callback, "That journal entry is unavailable.", show_alert=True)
+            return
+        day, reference, reflection, prayer, created_at = entry
+        heading = f"Private journal · Day {day} · {created_at[:10]}"
+        if reference:
+            heading += f" · {reference}"
+        content = f"{heading}\n\n{reflection}"
+        if prayer:
+            content += f"\n\nPrayer\n{prayer}"
+        await _answer_callback(callback)
+        await callback.message.answer(content)
+
+    @router.message(Command("cancel"), JournalEntryFlow.day)
+    @router.message(Command("cancel"), JournalEntryFlow.reference)
+    @router.message(Command("cancel"), JournalEntryFlow.reflection)
+    @router.message(Command("cancel"), JournalEntryFlow.prayer)
+    async def cancel_journal_entry(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await message.answer("Journal entry cancelled. Nothing was saved.")
+
+    @router.message(JournalEntryFlow.day)
+    async def choose_journal_day(message: Message, state: FSMContext) -> None:
+        if message.chat.type != "private" or message.from_user is None:
+            await message.answer("Your journal is available only in a private chat.")
+            return
+        value = (message.text or "").strip().casefold()
+        if value == "today":
+            today_entry = entry_for_date(plan, eat_date())
+            day = today_entry.day if today_entry else None
+        else:
+            try:
+                day = int(value)
+            except ValueError:
+                day = None
+        if day is None or plan.get_day(day) is None:
+            await message.answer(f"Choose a plan day from 1 to {plan.final_day}, or type today.")
+            return
+        await state.update_data(journal_day=day)
+        await state.set_state(JournalEntryFlow.reference)
+        await message.answer(
+            f"Day {day}: {plan.get_day(day).reading}\n"
+            "Add a verse reference if you want, or type Skip."
+        )
+
+    @router.message(JournalEntryFlow.reference)
+    async def choose_journal_reference(message: Message, state: FSMContext) -> None:
+        reference = (message.text or "").strip()
+        if len(reference) > 100:
+            await message.answer("Keep the verse reference under 100 characters, or type Skip.")
+            return
+        await state.update_data(journal_reference=None if reference.casefold() == "skip" else reference)
+        await state.set_state(JournalEntryFlow.reflection)
+        await message.answer("Write your reflection. It will stay private to your account.")
+
+    @router.message(JournalEntryFlow.reflection)
+    async def capture_journal_reflection(message: Message, state: FSMContext) -> None:
+        reflection = (message.text or "").strip()
+        if not reflection:
+            await message.answer("Please send a reflection, or use /cancel to stop without saving.")
+            return
+        if len(reflection) > 2400:
+            await message.answer("Please keep the reflection under 2,400 characters.")
+            return
+        await state.update_data(journal_reflection=reflection)
+        await state.set_state(JournalEntryFlow.prayer)
+        await message.answer("Add an optional prayer note, or type Skip to save your reflection.")
+
+    @router.message(JournalEntryFlow.prayer)
+    async def save_journal_reflection(message: Message, state: FSMContext) -> None:
+        if message.chat.type != "private" or message.from_user is None:
+            await state.clear()
+            await message.answer("Your journal is available only in a private chat.")
+            return
+        prayer = (message.text or "").strip()
+        if len(prayer) > 900:
+            await message.answer("Please keep the optional prayer note under 900 characters, or type Skip.")
+            return
+        data = await state.get_data()
+        save_journal_entry(
+            database_path,
+            message.from_user.id,
+            int(data["journal_day"]),
+            str(data["journal_reflection"]),
+            data.get("journal_reference"),
+            None if prayer.casefold() == "skip" else prayer,
+        )
+        await state.clear()
+        await message.answer(
+            "Your private journal entry is saved. Only you can view it.",
+            reply_markup=MAIN_MENU,
         )
 
     @router.message(Command("leaderboard"))
@@ -679,7 +876,8 @@ def build_router(
         await message.answer(
             "Use /today to see the shared reading, /plan to browse the full plan "
             "or /plan 17 to open the page containing Day 17, "
-            "and /progress to see your private completion record. "
+            "and /progress to see your private completed-plan history. "
+            "Use /journal to write a private reflection or prayer for a reading day. "
             "Open Settings to manage reminders or delete your account. "
             "You can mark earlier readings complete from the plan."
         )

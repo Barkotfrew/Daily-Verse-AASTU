@@ -47,13 +47,15 @@ def reminder_keyboard(day: int, mini_app_url: str) -> InlineKeyboardMarkup:
         from aiogram.types import WebAppInfo
 
         read_chapters = InlineKeyboardButton(
-            text="Read Chapters",
+            text="Open today's reading",
             web_app=WebAppInfo(url=f"{mini_app_url}/?{urlencode({'day': day})}"),
         )
     else:
-        read_chapters = InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}")
+        read_chapters = InlineKeyboardButton(
+            text="Open today's reading", callback_data=f"chapters:{day}"
+        )
     plan_button = InlineKeyboardButton(text="View Reading Plan", callback_data=f"plan:{day}")
-    return InlineKeyboardMarkup(inline_keyboard=[[read_button], [read_chapters], [plan_button]])
+    return InlineKeyboardMarkup(inline_keyboard=[[read_chapters], [read_button], [plan_button]])
 
 
 async def deliver_due_reminders(

@@ -58,6 +58,21 @@ def initialize_database(database_path: str | Path) -> None:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS journal_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_user_id INTEGER NOT NULL,
+                    plan_day INTEGER NOT NULL CHECK (plan_day > 0),
+                    verse_reference TEXT,
+                    reflection TEXT NOT NULL CHECK (length(reflection) > 0),
+                    prayer TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (telegram_user_id)
+                        REFERENCES users (telegram_user_id) ON DELETE CASCADE
+                )
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS reminder_deliveries (
                     reminder_date TEXT NOT NULL,
                     telegram_user_id INTEGER NOT NULL,
@@ -234,6 +249,10 @@ def delete_user(database_path: str | Path, telegram_user_id: int) -> bool:
                 "DELETE FROM reminder_deliveries WHERE telegram_user_id = ?",
                 (telegram_user_id,),
             )
+            connection.execute(
+                "DELETE FROM journal_entries WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            )
             cursor = connection.execute(
                 "DELETE FROM users WHERE telegram_user_id = ?",
                 (telegram_user_id,),
@@ -288,6 +307,81 @@ def completed_days(database_path: str | Path, telegram_user_id: int) -> tuple[in
             (telegram_user_id,),
         ).fetchall()
     return tuple(row[0] for row in rows)
+
+
+def completed_reading_history(
+    database_path: str | Path, telegram_user_id: int, limit: int = 10
+) -> tuple[tuple[int, str], ...]:
+    """Return this user's marked-complete plan days and their completion timestamps."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        rows = connection.execute(
+            """SELECT plan_day, completed_at FROM reading_completions
+               WHERE telegram_user_id = ? ORDER BY completed_at DESC, plan_day DESC
+               LIMIT ?""",
+            (telegram_user_id, limit),
+        ).fetchall()
+    return tuple((int(day), str(completed_at)) for day, completed_at in rows)
+
+
+def save_journal_entry(
+    database_path: str | Path,
+    telegram_user_id: int,
+    plan_day: int,
+    reflection: str,
+    verse_reference: str | None = None,
+    prayer: str | None = None,
+) -> int:
+    """Save a private reflection and optional verse/prayer for one user's plan day."""
+    if not reflection.strip():
+        raise ValueError("reflection must not be empty")
+    register_user(database_path, telegram_user_id)
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            cursor = connection.execute(
+                """INSERT INTO journal_entries
+                   (telegram_user_id, plan_day, verse_reference, reflection, prayer)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    telegram_user_id,
+                    plan_day,
+                    verse_reference.strip() if verse_reference and verse_reference.strip() else None,
+                    reflection.strip(),
+                    prayer.strip() if prayer and prayer.strip() else None,
+                ),
+            )
+    return int(cursor.lastrowid)
+
+
+def journal_entries(
+    database_path: str | Path, telegram_user_id: int, limit: int = 5
+) -> tuple[tuple[int, int, str | None, str, str | None, str], ...]:
+    """Return only the caller's latest private journal entries."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        rows = connection.execute(
+            """SELECT id, plan_day, verse_reference, reflection, prayer, created_at
+               FROM journal_entries WHERE telegram_user_id = ?
+               ORDER BY created_at DESC, id DESC LIMIT ?""",
+            (telegram_user_id, limit),
+        ).fetchall()
+    return tuple(
+        (int(row[0]), int(row[1]), row[2], str(row[3]), row[4], str(row[5]))
+        for row in rows
+    )
+
+
+def journal_entry(
+    database_path: str | Path, telegram_user_id: int, entry_id: int
+) -> tuple[int, str | None, str, str | None, str] | None:
+    """Fetch one journal entry only when it belongs to the requesting user."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            """SELECT plan_day, verse_reference, reflection, prayer, created_at
+               FROM journal_entries WHERE telegram_user_id = ? AND id = ?""",
+            (telegram_user_id, entry_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return int(row[0]), row[1], str(row[2]), row[3], str(row[4])
 
 
 def set_leaderboard_opt_in(
