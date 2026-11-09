@@ -410,26 +410,22 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
   z-index: 2;
   top: 0;
   left: 0;
-  display: flex;
-  width: 64px;
-  min-width: 64px;
-  min-height: 56px;
-  flex-direction: column;
+  display: grid;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   margin: 0;
-  padding: 5px 3px;
+  padding: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  border-radius: 50%;
+  background: transparent;
   color: var(--foreground);
-  font: 500 10px/1.2 "Noto Sans Ethiopic", sans-serif;
-  white-space: nowrap;
 }
 .journal-toolbar-button:hover { border-color: var(--muted); }
 .journal-toolbar-button svg { width: 19px; height: 19px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
-.journal-toolbar-button span { display: block; }
 .theme-toggle svg, .toolbar-icon svg, .verse-bookmark svg, .chapter-read-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .toolbar-icon svg { width: 18px; height: 18px; }
 .font-controls { display: flex; min-height: 42px; align-items: center; gap: 4px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px; }
@@ -438,8 +434,7 @@ button:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 380px) {
   .shell { width: min(100% - 16px, 640px); }
   .topbar { min-height: 112px; }
-  .journal-toolbar-button { width: 60px; min-width: 60px; min-height: 54px; gap: 3px; font-size: 9px; }
-  .journal-toolbar-button svg { width: 18px; height: 18px; }
+  .journal-toolbar-button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
   .theme-toggle { width: 36px; height: 36px; min-height: 36px; }
   .brand-logo { width: 88px; height: 25px; }
   .brand-copy { margin-top: 8px; }
