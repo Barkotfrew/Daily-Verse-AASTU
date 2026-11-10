@@ -83,7 +83,7 @@ Inline mode is enabled in BotFather with `/setinline`. Test in Telegram by typin
 
 ## Cloudflare Pages Mini App
 
-The Mini App is hosted separately from the personal GitHub Pages site. The Cloudflare Pages project uses the GitHub repository with build command `python scripts/build_miniapp.py` and output directory `webapp/dist`. Cloudflare's Git integration rebuilds the static reader when changes are pushed.
+The Mini App is hosted separately from the personal GitHub Pages site. The Pages-specific Wrangler config is `webapp/wrangler.toml`; keep it separate from the root `wrangler.toml`, which configures the Telegram Worker and D1 binding. In the Cloudflare Pages Git project, set the root directory to `webapp`, the build command to `python ../scripts/build_miniapp.py`, and the output directory to `dist`. The build script resolves the repository root from its own location and generates the static chapter assets into `webapp/dist`. Cloudflare's Git integration then rebuilds the reader when changes are pushed.
 
 The builder creates chapter-sized assets and a copy of the shared reading plan under the generated `webapp/dist` directory. The `Read Chapters` button in a private chat opens the Mini App directly on that day's assigned chapters. For inline chapter searches, its button opens the requested chapter. The app fetches only the chapters it needs. Read checkmarks are stored in Telegram CloudStorage under one small key per reading-plan day (within Telegram's 1,024-key per-user limit); outside Telegram, browser local storage is used. These checkmarks do not mark the day complete in the bot's private progress record.
 

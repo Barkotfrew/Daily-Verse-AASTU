@@ -9,5 +9,5 @@ MINI_APP_URL = "https://daily-verse-aastu.pages.dev"
 [[d1_databases]]
 binding = "DB"
 database_name = "daily-verse-aastu"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "9f54c8d0-a0e0-4e65-a79b-7d2be40c224a"
 migrations_dir = "cloudflare/worker/migrations"
