@@ -217,8 +217,12 @@ def build_router(
     bible: JsonBibleRepository | None = None,
     mini_app_url: str = "",
     reminder_scheduler_enabled: bool = False,
-    reminder_time: time = time(hour=7),
+    reminder_times: tuple[time, ...] | time = (time(6), time(12), time(18)),
 ) -> Router:
+    if isinstance(reminder_times, time):
+        reminder_schedule_text = reminder_times.strftime("%H:%M")
+    else:
+        reminder_schedule_text = ", ".join(slot.strftime("%H:%M") for slot in reminder_times)
     router = Router(name="daily-verse")
     registration_gate = RegistrationGate(database_path)
     router.message.outer_middleware(registration_gate)
@@ -718,7 +722,7 @@ def build_router(
         enabled = reminders_enabled(database_path, message.from_user.id)
         opted_in = leaderboard_opt_in(database_path, message.from_user.id)
         delivery_note = (
-            f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
+            f"Reminders are sent at {reminder_schedule_text} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )
@@ -742,7 +746,7 @@ def build_router(
         await _answer_callback(callback, "Reminders turned on." if enabled else "Reminders turned off.")
         if callback.message:
             delivery_note = (
-                f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
+                f"Reminders are sent at {reminder_schedule_text} EAT, including on days you have marked as read."
                 if reminder_scheduler_enabled
                 else "Delivery is paused until the hosting scheduler is verified and enabled."
             )
@@ -768,7 +772,7 @@ def build_router(
         )
         enabled = reminders_enabled(database_path, callback.from_user.id)
         delivery_note = (
-            f"Reminders are sent at {reminder_time.strftime('%H:%M')} EAT, including on days you have marked as read."
+            f"Reminders are sent at {reminder_schedule_text} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )

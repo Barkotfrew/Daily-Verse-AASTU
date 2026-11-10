@@ -40,6 +40,7 @@ from cloudflare_core import (
     mini_app_reader_keyboard,
     mini_app_reader_url,
     reminder_message,
+    reminder_keyboard,
     reminders_settings_message,
     leaderboard_settings_message,
     settings_keyboard,
@@ -131,11 +132,17 @@ MAIN_MENU = {
 
 class Default(WorkerEntrypoint):
     async def scheduled(self, controller, env, ctx):
-        """Queue one bounded subscriber batch for a minute in the 7 AM EAT window."""
-        if getattr(controller, "cron", "") != "* 4 * * *":
+        """Queue one bounded subscriber batch for the active 06/12/18 EAT window."""
+        if getattr(controller, "cron", "") != "* 3,9,15 * * *":
             return
         timestamp = int(controller.scheduledTime)
         reminder_date = scheduled_eat_date(timestamp)
+        from datetime import datetime, timezone
+
+        eat_hour = (datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).hour + 3) % 24
+        schedule_slot = f"{eat_hour:02d}:00"
+        if schedule_slot not in {"06:00", "12:00", "18:00"}:
+            return
         plan = await self.env.DB.prepare(
             "SELECT plan_day, ethiopian_date, gregorian_date, reading "
             "FROM reading_plan WHERE gregorian_date = ?"
@@ -144,11 +151,12 @@ class Default(WorkerEntrypoint):
             return
 
         await self.env.DB.prepare(
-            "INSERT OR IGNORE INTO reminder_runs (reminder_date) VALUES (?)"
-        ).bind(reminder_date).run()
+            "INSERT OR IGNORE INTO reminder_runs (reminder_date, schedule_slot) VALUES (?, ?)"
+        ).bind(reminder_date, schedule_slot).run()
         run = await self.env.DB.prepare(
-            "SELECT last_user_id, finished FROM reminder_runs WHERE reminder_date = ?"
-        ).bind(reminder_date).first()
+            "SELECT last_user_id, finished FROM reminder_runs "
+            "WHERE reminder_date = ? AND schedule_slot = ?"
+        ).bind(reminder_date, schedule_slot).first()
         if run is None or bool(run["finished"]):
             return
         recipients = await self.env.DB.prepare(
@@ -161,16 +169,17 @@ class Default(WorkerEntrypoint):
         users = tuple(recipients.results) if recipients else ()
         if not users:
             await self.env.DB.prepare(
-                "UPDATE reminder_runs SET finished = 1 WHERE reminder_date = ?"
-            ).bind(reminder_date).run()
+                "UPDATE reminder_runs SET finished = 1 "
+                "WHERE reminder_date = ? AND schedule_slot = ?"
+            ).bind(reminder_date, schedule_slot).run()
             return
 
         insert_statements = [
             self.env.DB.prepare(
                 "INSERT OR IGNORE INTO reminder_deliveries "
-                "(reminder_date, telegram_user_id, plan_day, status) "
-                "VALUES (?, ?, ?, 'queued')"
-            ).bind(reminder_date, user["telegram_user_id"], plan["plan_day"])
+                "(reminder_date, schedule_slot, telegram_user_id, plan_day, status) "
+                "VALUES (?, ?, ?, ?, 'queued')"
+            ).bind(reminder_date, schedule_slot, user["telegram_user_id"], plan["plan_day"])
             for user in users
         ]
         await self.env.DB.batch(insert_statements)
@@ -181,16 +190,21 @@ class Default(WorkerEntrypoint):
         batch = [
             {"body": {
                 "reminder_date": reminder_date,
+                "schedule_slot": schedule_slot,
                 "telegram_user_id": int(user["telegram_user_id"]),
                 "chat_id": int(user["private_chat_id"]),
                 "text": message,
+                "reply_markup": reminder_keyboard(
+                    getattr(self.env, "MINI_APP_URL", ""), int(plan["plan_day"])
+                ),
             }}
             for user in users
         ]
         await self.env.REMINDER_QUEUE.sendBatch(batch)
         await self.env.DB.prepare(
-            "UPDATE reminder_runs SET last_user_id = ? WHERE reminder_date = ?"
-        ).bind(users[-1]["telegram_user_id"], reminder_date).run()
+            "UPDATE reminder_runs SET last_user_id = ? "
+            "WHERE reminder_date = ? AND schedule_slot = ?"
+        ).bind(users[-1]["telegram_user_id"], reminder_date, schedule_slot).run()
 
     async def queue(self, batch):
         """Deliver queued reminders independently and retry transient failures."""
@@ -201,11 +215,13 @@ class Default(WorkerEntrypoint):
                     message.ack()
                     continue
                 reminder_date = body.get("reminder_date")
+                schedule_slot = body.get("schedule_slot")
                 user_id = body.get("telegram_user_id")
                 chat_id = body.get("chat_id")
                 text = body.get("text")
                 if (
                     not isinstance(reminder_date, str)
+                    or schedule_slot not in {"06:00", "12:00", "18:00"}
                     or not isinstance(user_id, int)
                     or not isinstance(chat_id, int)
                     or not isinstance(text, str)
@@ -219,10 +235,11 @@ class Default(WorkerEntrypoint):
                     "UPDATE reminder_deliveries SET status = 'sent', "
                     "attempts = attempts + 1, last_error = NULL "
                     "WHERE reminder_date = ? AND telegram_user_id = ? "
+                    "AND schedule_slot = ? "
                     "AND status IN ('queued', 'failed') "
                     "AND EXISTS (SELECT 1 FROM users WHERE telegram_user_id = ? "
                     "AND reminders_enabled = 1 AND private_chat_id = ?)"
-                ).bind(reminder_date, user_id, user_id, chat_id).run()
+                ).bind(reminder_date, user_id, schedule_slot, user_id, chat_id).run()
                 meta = getattr(claim, "meta", None)
                 if meta is None and isinstance(claim, dict):
                     meta = claim.get("meta")
@@ -235,15 +252,20 @@ class Default(WorkerEntrypoint):
 
                 try:
                     await self._telegram_request(
-                        "sendMessage", {"chat_id": chat_id, "text": text}
+                        "sendMessage", {
+                            "chat_id": chat_id,
+                            "text": text,
+                            "reply_markup": body.get("reply_markup"),
+                        }
                     )
                 except Exception:
                     await self.env.DB.prepare(
                         "UPDATE reminder_deliveries SET status = 'failed', "
                         "last_error = 'Telegram delivery failed' "
                         "WHERE reminder_date = ? AND telegram_user_id = ? "
+                        "AND schedule_slot = ? "
                         "AND status = 'sent'"
-                    ).bind(reminder_date, user_id).run()
+                    ).bind(reminder_date, user_id, schedule_slot).run()
                     if int(getattr(message, "attempts", 1)) < 5:
                         message.retry(delaySeconds=120)
                     else:

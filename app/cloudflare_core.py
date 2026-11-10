@@ -76,6 +76,17 @@ def mini_app_reader_keyboard(base_url: str, day: int) -> dict[str, Any] | None:
     }
 
 
+def reminder_keyboard(base_url: str, day: int) -> dict[str, Any]:
+    """Open today's assigned chapters directly from a scheduled reminder."""
+    url = mini_app_reader_url(base_url, day=day)
+    button = {"text": "Open today's reading"}
+    if url:
+        button["web_app"] = {"url": url}
+    else:
+        button["callback_data"] = f"plan:{day}"
+    return {"inline_keyboard": [[button]]}
+
+
 def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str, Any]:
     """Build a private today's-reading keyboard with explicit completion."""
     rows = [[{

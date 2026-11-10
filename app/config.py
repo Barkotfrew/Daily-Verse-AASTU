@@ -14,7 +14,12 @@ class Settings:
     database_path: Path
     mini_app_url: str = ""
     reminder_scheduler_enabled: bool = False
-    reminder_time: time = time(hour=7)
+    reminder_times: tuple[time, ...] = (time(6), time(12), time(18))
+
+    @property
+    def reminder_time(self) -> time:
+        """Compatibility for callers that still display one configured time."""
+        return self.reminder_times[0]
 
 
 def load_settings() -> Settings:
@@ -28,12 +33,19 @@ def load_settings() -> Settings:
             key, value = line.split("=", 1)
             os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
     mini_app_url = os.getenv("MINI_APP_URL", "").strip().rstrip("/")
-    reminder_time_text = os.getenv("REMINDER_TIME", "07:00").strip()
+    reminder_times_text = os.getenv("REMINDER_TIMES", "06:00,12:00,18:00").strip()
     try:
-        reminder_hour, reminder_minute = (int(part) for part in reminder_time_text.split(":"))
-        reminder_time = time(hour=reminder_hour, minute=reminder_minute)
+        reminder_times = tuple(
+            time(hour=int(hour), minute=int(minute))
+            for hour, minute in (value.strip().split(":") for value in reminder_times_text.split(","))
+        )
     except (ValueError, TypeError) as error:
-        raise ValueError("REMINDER_TIME must use 24-hour HH:MM format, for example 07:00") from error
+        raise ValueError(
+            "REMINDER_TIMES must be comma-separated 24-hour HH:MM values, "
+            "for example 06:00,12:00,18:00"
+        ) from error
+    if not reminder_times or len(set(reminder_times)) != len(reminder_times):
+        raise ValueError("REMINDER_TIMES must contain at least one unique time")
     if mini_app_url:
         from urllib.parse import urlsplit
 
@@ -46,5 +58,5 @@ def load_settings() -> Settings:
         mini_app_url=mini_app_url,
         reminder_scheduler_enabled=os.getenv("REMINDER_SCHEDULER_ENABLED", "false").strip().lower()
         in {"1", "true", "yes", "on"},
-        reminder_time=reminder_time,
+        reminder_times=tuple(sorted(reminder_times)),
     )

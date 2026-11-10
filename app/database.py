@@ -75,6 +75,7 @@ def initialize_database(database_path: str | Path) -> None:
                 """
                 CREATE TABLE IF NOT EXISTS reminder_deliveries (
                     reminder_date TEXT NOT NULL,
+                    schedule_slot TEXT NOT NULL DEFAULT '06:00',
                     telegram_user_id INTEGER NOT NULL,
                     plan_day INTEGER NOT NULL CHECK (plan_day > 0),
                     status TEXT NOT NULL DEFAULT 'pending'
@@ -83,12 +84,45 @@ def initialize_database(database_path: str | Path) -> None:
                     next_attempt_at TEXT,
                     last_error TEXT,
                     sent_at TEXT,
-                    PRIMARY KEY (reminder_date, telegram_user_id),
+                    PRIMARY KEY (reminder_date, schedule_slot, telegram_user_id),
                     FOREIGN KEY (telegram_user_id)
                         REFERENCES users (telegram_user_id) ON DELETE CASCADE
                 )
                 """
             )
+            delivery_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(reminder_deliveries)")
+            }
+            if "schedule_slot" not in delivery_columns:
+                connection.execute("ALTER TABLE reminder_deliveries RENAME TO reminder_deliveries_legacy")
+                connection.execute(
+                    """CREATE TABLE reminder_deliveries (
+                        reminder_date TEXT NOT NULL,
+                        schedule_slot TEXT NOT NULL,
+                        telegram_user_id INTEGER NOT NULL,
+                        plan_day INTEGER NOT NULL CHECK (plan_day > 0),
+                        status TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending', 'sent', 'failed')),
+                        attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+                        next_attempt_at TEXT,
+                        last_error TEXT,
+                        sent_at TEXT,
+                        PRIMARY KEY (reminder_date, schedule_slot, telegram_user_id),
+                        FOREIGN KEY (telegram_user_id)
+                            REFERENCES users (telegram_user_id) ON DELETE CASCADE
+                    )"""
+                )
+                # Treat old once-a-day deliveries as the new morning slot to avoid
+                # resending them when this schema is first upgraded.
+                connection.execute(
+                    """INSERT INTO reminder_deliveries
+                       (reminder_date, schedule_slot, telegram_user_id, plan_day,
+                        status, attempts, next_attempt_at, last_error, sent_at)
+                       SELECT reminder_date, '06:00', telegram_user_id, plan_day,
+                              status, attempts, next_attempt_at, last_error, sent_at
+                       FROM reminder_deliveries_legacy"""
+                )
+                connection.execute("DROP TABLE reminder_deliveries_legacy")
 
 
 def register_user(
@@ -430,60 +464,69 @@ def leaderboard_entries(
     return tuple((int(row[0]), str(row[1]), str(row[2]), int(row[3])) for row in rows)
 
 
-def prepare_reminder_deliveries(database_path: str | Path, reminder_date: str, plan_day: int) -> None:
+def prepare_reminder_deliveries(
+    database_path: str | Path, reminder_date: str, plan_day: int, schedule_slot: str = "06:00"
+) -> None:
     """Create a unique pending delivery for each opted-in private-chat user."""
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
             connection.execute(
                 """INSERT OR IGNORE INTO reminder_deliveries
-                   (reminder_date, telegram_user_id, plan_day)
-                   SELECT ?, telegram_user_id, ? FROM users
+                   (reminder_date, schedule_slot, telegram_user_id, plan_day)
+                   SELECT ?, ?, telegram_user_id, ? FROM users
                    WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL
                      AND display_name IS NOT NULL AND trim(display_name) != ''
                      AND academic_year IS NOT NULL AND trim(academic_year) != ''
                      AND department IS NOT NULL AND trim(department) != ''""",
-                (reminder_date, plan_day),
+                (reminder_date, schedule_slot, plan_day),
             )
 
 
 def due_reminder_deliveries(
-    database_path: str | Path, reminder_date: str, now: str, max_attempts: int
+    database_path: str | Path, reminder_date: str, now: str, max_attempts: int,
+    schedule_slot: str = "06:00",
 ) -> tuple[tuple[int, int, int], ...]:
     with closing(sqlite3.connect(database_path)) as connection:
         rows = connection.execute(
             """SELECT d.telegram_user_id, u.private_chat_id, d.attempts
                FROM reminder_deliveries AS d
                JOIN users AS u ON u.telegram_user_id = d.telegram_user_id
-               WHERE d.reminder_date = ? AND d.status != 'sent' AND d.attempts < ?
+               WHERE d.reminder_date = ? AND d.schedule_slot = ?
+                 AND d.status != 'sent' AND d.attempts < ?
                  AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= ?)
                  AND u.reminders_enabled = 1 AND u.private_chat_id IS NOT NULL
                  AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
                  AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
                  AND u.department IS NOT NULL AND trim(u.department) != ''
                ORDER BY d.telegram_user_id""",
-            (reminder_date, max_attempts, now),
+            (reminder_date, schedule_slot, max_attempts, now),
         ).fetchall()
     return tuple((row[0], row[1], row[2]) for row in rows)
 
 
-def record_reminder_attempt(database_path: str | Path, reminder_date: str, user_id: int) -> None:
+def record_reminder_attempt(
+    database_path: str | Path, reminder_date: str, user_id: int, schedule_slot: str = "06:00"
+) -> None:
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
             connection.execute(
                 """UPDATE reminder_deliveries SET attempts = attempts + 1
-                   WHERE reminder_date = ? AND telegram_user_id = ? AND status != 'sent'""",
-                (reminder_date, user_id),
+                   WHERE reminder_date = ? AND schedule_slot = ?
+                     AND telegram_user_id = ? AND status != 'sent'""",
+                (reminder_date, schedule_slot, user_id),
             )
 
 
-def mark_reminder_sent(database_path: str | Path, reminder_date: str, user_id: int) -> None:
+def mark_reminder_sent(
+    database_path: str | Path, reminder_date: str, user_id: int, schedule_slot: str = "06:00"
+) -> None:
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
             connection.execute(
                 """UPDATE reminder_deliveries SET status = 'sent', sent_at = CURRENT_TIMESTAMP,
                    next_attempt_at = NULL, last_error = NULL
-                   WHERE reminder_date = ? AND telegram_user_id = ?""",
-                (reminder_date, user_id),
+                   WHERE reminder_date = ? AND schedule_slot = ? AND telegram_user_id = ?""",
+                (reminder_date, schedule_slot, user_id),
             )
 
 
@@ -493,11 +536,13 @@ def mark_reminder_failed(
     user_id: int,
     error: str,
     next_attempt_at: str | None,
+    schedule_slot: str = "06:00",
 ) -> None:
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
             connection.execute(
                 """UPDATE reminder_deliveries SET status = 'failed', last_error = ?,
-                   next_attempt_at = ? WHERE reminder_date = ? AND telegram_user_id = ?""",
-                (error[:500], next_attempt_at, reminder_date, user_id),
+                   next_attempt_at = ? WHERE reminder_date = ? AND schedule_slot = ?
+                   AND telegram_user_id = ?""",
+                (error[:500], next_attempt_at, reminder_date, schedule_slot, user_id),
             )

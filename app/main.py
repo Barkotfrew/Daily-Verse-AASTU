@@ -56,7 +56,7 @@ async def main() -> None:
         bible,
         settings.mini_app_url,
         settings.reminder_scheduler_enabled,
-        settings.reminder_time,
+        settings.reminder_times,
     ))
     reminder_task = None
     try:
@@ -67,10 +67,10 @@ async def main() -> None:
             reminder_task = asyncio.create_task(
                 run_reminder_scheduler(
                     bot,
-                    database_path,
+                     database_path,
                     plan,
                     settings.mini_app_url,
-                    settings.reminder_time,
+                    reminder_times=settings.reminder_times,
                 )
             )
         await dispatcher.start_polling(bot)
