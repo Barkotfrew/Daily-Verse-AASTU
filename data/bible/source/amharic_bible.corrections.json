@@ -13,6 +13,17 @@
       ]
     },
     {
+      "book_id": "2KI",
+      "chapter": 11,
+      "complete": true,
+      "verses": [
+        {
+          "start": 21,
+          "text": "ኢዮአስም መንገሥ በጀመረ ጊዜ የሰባት ዓመት ልጅ ነበረ።"
+        }
+      ]
+    },
+    {
       "book_id": "DEU",
       "chapter": 13,
       "complete": true,
