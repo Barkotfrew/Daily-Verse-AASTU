@@ -12,6 +12,7 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+data/private_d1_import*.sql
 .pytest_cache/
 .coverage
 htmlcov/

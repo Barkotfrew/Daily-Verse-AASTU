@@ -1,14 +1,11 @@
-"""Cloudflare Worker entry point for the incremental hosting migration.
-
-Private signup, reading-plan browsing, assigned-reading Mini App links, and
-bilingual Amharic inline reference search are implemented. Keep the production
-webhook on the polling bot; reminder Queue and Cron bindings remain disabled
-until their Cloudflare runtime flow is deliberately validated.
-"""
+"""Cloudflare Worker entry point for the Telegram bot and D1-backed features."""
 
 import json
+import hashlib
+import hmac
+import time
 from datetime import date
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 
 from workers import Response, WorkerEntrypoint, fetch
 from js import Object
@@ -123,6 +120,7 @@ MAIN_MENU = {
     "keyboard": [
         [{"text": "Today's Reading"}, {"text": "Reading Plan"}],
         [{"text": "My Progress"}, {"text": "Leaderboard"}],
+        [{"text": "My Journal"}],
         [{"text": "Settings"}],
         [{"text": "Help"}],
     ],
@@ -131,6 +129,156 @@ MAIN_MENU = {
 
 
 class Default(WorkerEntrypoint):
+    def _journal_cors_headers(self, request):
+        origin = request.headers.get("Origin", "")
+        allowed = {
+            getattr(self.env, "MINI_APP_URL", "").rstrip("/"),
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        }
+        headers = {
+            "Vary": "Origin",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Max-Age": "600",
+        }
+        if origin in allowed and origin:
+            headers["Access-Control-Allow-Origin"] = origin
+        return headers
+
+    def _journal_response(self, request, payload, status=200):
+        headers = self._journal_cors_headers(request)
+        headers["Content-Type"] = "application/json; charset=utf-8"
+        return Response(json.dumps(payload, ensure_ascii=False), status=status, headers=headers)
+
+    def _mini_app_user_id(self, request):
+        authorization = request.headers.get("Authorization", "")
+        if not authorization.startswith("tma "):
+            return None
+        bot_token = getattr(self.env, "TELEGRAM_BOT_TOKEN", "")
+        if not bot_token:
+            return None
+        raw = authorization[4:]
+        if len(raw) > 8192:
+            return None
+        try:
+            pairs = parse_qsl(raw, keep_blank_values=True, strict_parsing=True)
+            if len({key for key, _ in pairs}) != len(pairs):
+                return None
+            fields = dict(pairs)
+            received_hash = fields.pop("hash")
+            auth_date = int(fields["auth_date"])
+            now = int(time.time())
+            if auth_date > now + 60 or now - auth_date > 86400:
+                return None
+            check_string = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
+            secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+            expected_hash = hmac.new(secret, check_string.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(received_hash, expected_hash):
+                return None
+            user = json.loads(fields["user"])
+            user_id = user.get("id")
+            return user_id if isinstance(user_id, int) and user_id > 0 else None
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    async def _handle_journal_api(self, request, path):
+        headers = self._journal_cors_headers(request)
+        if request.method == "OPTIONS":
+            return Response("", status=204 if "Access-Control-Allow-Origin" in headers else 403, headers=headers)
+        if "Access-Control-Allow-Origin" not in headers:
+            return self._journal_response(request, {"error": "Origin not allowed"}, 403)
+        user_id = self._mini_app_user_id(request)
+        if user_id is None:
+            return self._journal_response(request, {"error": "Telegram authentication required"}, 401)
+        profile = await self.env.DB.prepare(
+            "SELECT display_name, academic_year, department FROM users WHERE telegram_user_id = ?"
+        ).bind(user_id).first()
+        if profile is None or not all(profile[key] for key in ("display_name", "academic_year", "department")):
+            return self._journal_response(request, {"error": "Complete bot registration before syncing journals"}, 403)
+
+        if path == "/api/journal" and request.method == "GET":
+            result = await self.env.DB.prepare(
+                "SELECT COALESCE(client_entry_id, 'bot-' || id) AS client_entry_id, "
+                "plan_day, verse_reference, verse_text, reflection, prayer, "
+                "created_at, updated_at FROM journal_entries WHERE telegram_user_id = ? "
+                "ORDER BY updated_at DESC, id DESC LIMIT 500"
+            ).bind(user_id).all()
+            rows = tuple(result.results) if result else ()
+            entries = [{
+                key: row[key] for key in (
+                    "client_entry_id", "plan_day", "verse_reference", "verse_text",
+                    "reflection", "prayer", "created_at", "updated_at",
+                )
+            } for row in rows]
+            return self._journal_response(request, {"entries": entries})
+
+        entry_id = path.removeprefix("/api/journal/") if path.startswith("/api/journal/") else None
+        if request.method == "DELETE" and entry_id:
+            await self.env.DB.prepare(
+                "DELETE FROM journal_entries WHERE telegram_user_id = ? AND "
+                "(client_entry_id = ? OR ('bot-' || id) = ?)"
+            ).bind(user_id, entry_id, entry_id).run()
+            return self._journal_response(request, {"ok": True})
+
+        if (request.method == "POST" and path == "/api/journal") or (
+            request.method == "PUT" and entry_id
+        ):
+            try:
+                body = await request.json()
+            except Exception:
+                return self._journal_response(request, {"error": "Invalid JSON"}, 400)
+            if not isinstance(body, dict):
+                return self._journal_response(request, {"error": "Invalid journal entry"}, 400)
+            client_entry_id = str(body.get("client_entry_id", entry_id or ""))[:100]
+            reference = str(body.get("reference", "Reading reflection")).strip()[:200]
+            verse_text = str(body.get("verse_text", "")).strip()[:600]
+            reflection = str(body.get("reflection", "")).strip()[:4000]
+            prayer = str(body.get("prayer", "")).strip()[:2000]
+            plan_day = body.get("plan_day")
+            if not client_entry_id or not reference or not (reflection or prayer):
+                return self._journal_response(request, {"error": "Entry needs an ID, reference, and reflection or prayer"}, 400)
+            if plan_day is not None:
+                try:
+                    plan_day = int(plan_day)
+                except (ValueError, TypeError):
+                    return self._journal_response(request, {"error": "Invalid reading day"}, 400)
+                valid_day = await self.env.DB.prepare(
+                    "SELECT 1 FROM reading_plan WHERE plan_day = ?"
+                ).bind(plan_day).first()
+                if valid_day is None:
+                    plan_day = None
+            if request.method == "PUT" and entry_id and entry_id != client_entry_id:
+                return self._journal_response(request, {"error": "Entry ID mismatch"}, 400)
+            if request.method == "PUT":
+                updated = await self.env.DB.prepare(
+                    "UPDATE journal_entries SET plan_day = ?, verse_reference = ?, verse_text = ?, "
+                    "reflection = ?, prayer = ?, client_entry_id = ?, updated_at = CURRENT_TIMESTAMP "
+                    "WHERE telegram_user_id = ? AND "
+                    "(client_entry_id = ? OR ('bot-' || id) = ?)"
+                ).bind(
+                    plan_day, reference, verse_text or None, reflection, prayer or None,
+                    client_entry_id, user_id, client_entry_id, client_entry_id,
+                ).run()
+                meta = getattr(updated, "meta", None)
+                changes = getattr(meta, "changes", 0) if meta is not None else 0
+                if isinstance(meta, dict):
+                    changes = meta.get("changes", changes)
+                if not changes:
+                    return self._journal_response(request, {"error": "Journal entry not found"}, 404)
+            else:
+                await self.env.DB.prepare(
+                    "INSERT INTO journal_entries (telegram_user_id, plan_day, verse_reference, verse_text, "
+                    "reflection, prayer, client_entry_id) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(telegram_user_id, client_entry_id) DO UPDATE SET "
+                    "plan_day = excluded.plan_day, verse_reference = excluded.verse_reference, "
+                    "verse_text = excluded.verse_text, reflection = excluded.reflection, prayer = excluded.prayer, "
+                    "updated_at = CURRENT_TIMESTAMP"
+                ).bind(user_id, plan_day, reference, verse_text or None, reflection, prayer or None, client_entry_id).run()
+            return self._journal_response(request, {"ok": True, "client_entry_id": client_entry_id})
+
+        return self._journal_response(request, {"error": "Not found"}, 404)
+
     async def scheduled(self, controller, env, ctx):
         """Queue one bounded subscriber batch for the active 06/12/18 EAT window."""
         if getattr(controller, "cron", "") != "* 3,9,15 * * *":
@@ -282,6 +430,9 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         path = urlparse(request.url).path
 
+        if path == "/api/journal" or path.startswith("/api/journal/"):
+            return await self._handle_journal_api(request, path)
+
         if request.method == "GET" and path == "/health":
             row = await self.env.DB.prepare(
                 "SELECT COUNT(*) AS total FROM reading_plan"
@@ -347,6 +498,86 @@ class Default(WorkerEntrypoint):
                     await self._send_message(
                         chat_id, "Your details have been updated.", MAIN_MENU
                     )
+                return Response("OK")
+            draft = await self.env.DB.prepare(
+                "SELECT stage, plan_day FROM journal_drafts WHERE telegram_user_id = ?"
+            ).bind(user_id).first()
+            if draft is not None:
+                stripped = text.strip()
+                if stripped.casefold() in {"/cancel", "cancel"}:
+                    await self.env.DB.prepare(
+                        "DELETE FROM journal_drafts WHERE telegram_user_id = ?"
+                    ).bind(user_id).run()
+                    await self._send_message(chat_id, "Journal entry cancelled. Nothing was saved.", MAIN_MENU)
+                    return Response("OK")
+                stage = draft["stage"]
+                if stage == "day":
+                    if stripped.casefold() == "today":
+                        selected = await self.env.DB.prepare(
+                            "SELECT plan_day FROM reading_plan WHERE gregorian_date = ?"
+                        ).bind(current_eat_date().isoformat()).first()
+                        day = int(selected["plan_day"]) if selected else None
+                    else:
+                        try:
+                            day = int(stripped)
+                        except ValueError:
+                            day = None
+                    valid_day = await self.env.DB.prepare(
+                        "SELECT plan_day FROM reading_plan WHERE plan_day = ?"
+                    ).bind(day).first() if day is not None else None
+                    if valid_day is None:
+                        bounds = await self.env.DB.prepare(
+                            "SELECT MIN(plan_day) AS first_day, MAX(plan_day) AS last_day FROM reading_plan"
+                        ).first()
+                        await self._send_message(
+                            chat_id,
+                            f"Choose a plan day from {bounds['first_day']} to {bounds['last_day']}, or type today."
+                            if bounds else "The reading plan is unavailable right now.",
+                        )
+                    else:
+                        await self.env.DB.prepare(
+                            "UPDATE journal_drafts SET plan_day = ?, stage = 'reference' "
+                            "WHERE telegram_user_id = ?"
+                        ).bind(day, user_id).run()
+                        await self._send_message(chat_id, "Add a verse reference, or type Skip.")
+                elif stage == "reference":
+                    if len(stripped) > 100:
+                        await self._send_message(chat_id, "Keep the verse reference under 100 characters, or type Skip.")
+                    else:
+                        reference = None if stripped.casefold() == "skip" else stripped
+                        await self.env.DB.prepare(
+                            "UPDATE journal_drafts SET verse_reference = ?, stage = 'reflection' "
+                            "WHERE telegram_user_id = ?"
+                        ).bind(reference, user_id).run()
+                        await self._send_message(chat_id, "Write your reflection. It will stay private to your account.")
+                elif stage == "reflection":
+                    if not stripped:
+                        await self._send_message(chat_id, "Please send a reflection, or use /cancel to stop without saving.")
+                    elif len(stripped) > 2400:
+                        await self._send_message(chat_id, "Please keep the reflection under 2,400 characters.")
+                    else:
+                        await self.env.DB.prepare(
+                            "UPDATE journal_drafts SET reflection = ?, stage = 'prayer' "
+                            "WHERE telegram_user_id = ?"
+                        ).bind(stripped, user_id).run()
+                        await self._send_message(chat_id, "Add an optional prayer note, or type Skip to save your reflection.")
+                else:
+                    if len(stripped) > 900:
+                        await self._send_message(chat_id, "Please keep the optional prayer note under 900 characters, or type Skip.")
+                    else:
+                        prayer = None if stripped.casefold() == "skip" else stripped
+                        await self.env.DB.prepare(
+                            "INSERT INTO journal_entries "
+                            "(telegram_user_id, plan_day, verse_reference, reflection, prayer) "
+                            "SELECT telegram_user_id, plan_day, verse_reference, reflection, ? "
+                            "FROM journal_drafts WHERE telegram_user_id = ?"
+                        ).bind(prayer, user_id).run()
+                        await self.env.DB.prepare(
+                            "DELETE FROM journal_drafts WHERE telegram_user_id = ?"
+                        ).bind(user_id).run()
+                        await self._send_message(
+                            chat_id, "Your private journal entry is saved. Only you can view it.", MAIN_MENU
+                        )
                 return Response("OK")
             command = supported_command(text)
             if command is None:
@@ -477,6 +708,48 @@ class Default(WorkerEntrypoint):
                     leaderboard_enabled = bool(settings["leaderboard_opt_in"]) if settings else False
                     response_message = format_worker_settings(settings)
                     reply_markup = settings_keyboard(enabled, leaderboard_enabled)
+                elif command == "journal":
+                    entries_result = await self.env.DB.prepare(
+                        "SELECT id, plan_day, verse_reference, reflection, created_at "
+                        "FROM journal_entries WHERE telegram_user_id = ? "
+                        "ORDER BY created_at DESC, id DESC LIMIT 5"
+                    ).bind(user_id).all()
+                    entries = tuple(entries_result.results) if entries_result else ()
+                    if not entries:
+                        response_message = (
+                            "My private journal\n\n"
+                            "Write a reflection or prayer connected to a reading-plan day. "
+                            "Only you can view these notes; they are never shown on the leaderboard."
+                        )
+                    else:
+                        sections = [
+                            "My private journal",
+                            "Only you can view these notes; they are never shown on the leaderboard.",
+                        ]
+                        entry_buttons = []
+                        for item in entries:
+                            heading = (
+                                f"Day {item['plan_day']} · {str(item['created_at'])[:10]}"
+                                if item["plan_day"] is not None
+                                else f"{str(item['created_at'])[:10]}"
+                            )
+                            if item["verse_reference"]:
+                                heading += f" · {item['verse_reference']}"
+                            preview = str(item["reflection"])
+                            sections.append(heading + "\n" + preview[:250] + ("…" if len(preview) > 250 else ""))
+                            entry_buttons.append([{
+                                "text": f"Open Day {item['plan_day']} entry" if item["plan_day"] is not None else "Open journal entry",
+                                "callback_data": f"journal:view:{item['id']}",
+                            }])
+                        response_message = "\n\n".join(sections)
+                        reply_markup = {"inline_keyboard": entry_buttons + [[{
+                            "text": "Write a reflection", "callback_data": "journal:new"
+                        }]]}
+                        await self._send_message(chat_id, response_message, reply_markup)
+                        return Response("OK")
+                    reply_markup = {"inline_keyboard": [[{
+                        "text": "Write a reflection", "callback_data": "journal:new"
+                    }]]}
                 elif command == "leaderboard":
                     result = await self.env.DB.prepare(LEADERBOARD_QUERY).all()
                     rows = tuple(result.results) if result else ()
@@ -488,8 +761,8 @@ class Default(WorkerEntrypoint):
                         "the full plan, or /plan 17 to open the page containing Day 17. "
                         "Open a plan day to read its chapters and mark it complete. "
                         "Use /progress to see your reading record and streak, "
-                        "/leaderboard to view readers who opted in, and /settings "
-                        "to manage reminders and leaderboard privacy."
+                        "/leaderboard to view readers who opted in, /journal for your private "
+                        "reflections, and /settings to manage reminders and leaderboard privacy."
                     )
                     reply_markup = MAIN_MENU
                 else:
@@ -566,6 +839,40 @@ class Default(WorkerEntrypoint):
         # Telegram requires callback queries to be answered promptly. Do this
         # before D1 lookups so slow database responses cannot expire the query.
         await self._answer_callback(callback_id)
+
+        if data == "journal:new":
+            await self.env.DB.prepare(
+                "INSERT INTO journal_drafts (telegram_user_id, stage) VALUES (?, 'day') "
+                "ON CONFLICT(telegram_user_id) DO UPDATE SET stage = 'day', plan_day = NULL, "
+                "verse_reference = NULL, reflection = NULL, created_at = CURRENT_TIMESTAMP"
+            ).bind(user["id"]).run()
+            await self._send_message(
+                chat["id"],
+                "Which reading-plan day is this for? Send a day number, or type today.\n"
+                "Send /cancel at any time to discard the entry.",
+            )
+            return True
+
+        if data.startswith("journal:view:"):
+            try:
+                entry_id = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                return True
+            entry = await self.env.DB.prepare(
+                "SELECT plan_day, verse_reference, reflection, prayer, created_at "
+                "FROM journal_entries WHERE telegram_user_id = ? AND id = ?"
+            ).bind(user["id"], entry_id).first()
+            if entry is None:
+                await self._send_message(chat["id"], "That journal entry is unavailable.")
+                return True
+            heading = f"Private journal · Day {entry['plan_day']} · {str(entry['created_at'])[:10]}"
+            if entry["verse_reference"]:
+                heading += f" · {entry['verse_reference']}"
+            text = heading + "\n\n" + str(entry["reflection"])
+            if entry["prayer"]:
+                text += "\n\nPrayer\n" + str(entry["prayer"])
+            await self._send_message(chat["id"], text)
+            return True
 
         profile = await self.env.DB.prepare(
             "SELECT display_name, academic_year, department, reminders_enabled, "

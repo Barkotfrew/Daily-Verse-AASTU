@@ -1,6 +1,7 @@
 """Build the static Mini App site and one small JSON asset per Bible chapter."""
 
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -34,6 +35,13 @@ def build_site(
 
     for filename in ("index.html", "app.js", "style.css"):
         shutil.copy2(WEBAPP_SOURCE / filename, output / filename)
+    api_url = os.environ.get("DAILY_VERSE_API_URL", "").strip().rstrip("/")
+    if api_url and not (api_url.startswith("https://") or api_url.startswith("http://localhost") or api_url.startswith("http://127.0.0.1")):
+        raise ValueError("DAILY_VERSE_API_URL must use HTTPS (localhost is allowed for local development).")
+    (output / "config.js").write_text(
+        "window.DAILY_VERSE_API_URL = " + json.dumps(api_url) + ";\n",
+        encoding="utf-8",
+    )
     shutil.copytree(WEBAPP_SOURCE / "fonts", output / "fonts")
     shutil.copytree(WEBAPP_SOURCE / "images", output / "images")
 

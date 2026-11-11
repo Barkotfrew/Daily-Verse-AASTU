@@ -82,6 +82,10 @@
   let currentPassage = null;
   let selectedVerse = null;
   let editingJournalId = null;
+  let journalBackendActive = false;
+  const journalApiUrl = String(window.DAILY_VERSE_API_URL ?? "").replace(/\/$/, "");
+  const journalSyncStatus = document.querySelector("#journal-sync-status");
+  const journalSavedMessage = document.querySelector("#journal-saved-message");
   let readChapters = [];
   let verseFontSize = 18;
   const cloudReadSaveQueues = new Map();
@@ -391,6 +395,71 @@
     }
   }
 
+  async function journalApi(path = "", options = {}) {
+    if (!journalApiUrl || !telegram?.initData) throw new Error("Journal sync is not configured in this Mini App.");
+    const response = await fetch(`${journalApiUrl}/api/journal${path}`, {
+      ...options,
+      headers: {
+        Authorization: `tma ${telegram.initData}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
+      },
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Journal request failed (${response.status}).`);
+    return result;
+  }
+
+  function apiEntryPayload(entry) {
+    const dayMatch = /(?:^| · )Day (\d+)/.exec(entry.reference ?? "");
+    return {
+      client_entry_id: String(entry.clientEntryId ?? entry.id).slice(0, 100),
+      plan_day: entry.planDay ?? (dayMatch ? Number(dayMatch[1]) : null),
+      reference: entry.reference ?? "Reading reflection",
+      verse_text: entry.verseText ?? "",
+      reflection: entry.reflection ?? "",
+      prayer: entry.prayer ?? "",
+    };
+  }
+
+  async function activateJournalSync() {
+    if (!journalApiUrl || !telegram?.initData) {
+      journalSyncStatus.textContent = "Private to this device until account sync is configured.";
+      return;
+    }
+    journalSyncStatus.textContent = "Connecting your private journal…";
+    try {
+      const initial = await journalApi();
+      const serverIds = new Set((initial.entries ?? []).map((entry) => entry.client_entry_id));
+      // Preserve old device notes by importing each one with a stable id. The
+      // API upsert makes this safe to retry after a timeout or interrupted load.
+      for (const entry of journalEntries) {
+        const payload = apiEntryPayload(entry);
+        if (!serverIds.has(payload.client_entry_id)) {
+          await journalApi("", { method: "POST", body: JSON.stringify(payload) });
+        }
+      }
+      const synced = await journalApi();
+      journalEntries = (synced.entries ?? []).map((entry) => ({
+        id: entry.client_entry_id,
+        clientEntryId: entry.client_entry_id,
+        planDay: entry.plan_day ?? null,
+        reference: entry.verse_reference ?? "Reading reflection",
+        verseText: entry.verse_text ?? "",
+        reflection: entry.reflection ?? "",
+        prayer: entry.prayer ?? "",
+        updatedAt: Date.parse(entry.updated_at ?? entry.created_at) || Date.now(),
+      }));
+      journalBackendActive = true;
+      persistJournal();
+      renderJournal();
+      journalSyncStatus.textContent = "Your private journal is synced to your account and available on your devices.";
+    } catch (error) {
+      journalSyncStatus.textContent = `${error.message} Your existing notes remain saved on this device.`;
+      journalSyncStatus.classList.add("error");
+    }
+  }
+
   function renderJournal() {
     journalCount.textContent = String(journalEntries.length);
     journalList.replaceChildren();
@@ -434,7 +503,18 @@
       remove.type = "button";
       remove.className = "bookmark-remove";
       remove.textContent = "Delete";
-      remove.addEventListener("click", () => {
+      remove.addEventListener("click", async () => {
+        remove.disabled = true;
+        try {
+          if (journalBackendActive) {
+            await journalApi(`/${encodeURIComponent(entry.clientEntryId ?? entry.id)}`, { method: "DELETE" });
+          }
+        } catch (error) {
+          remove.disabled = false;
+          journalSyncStatus.textContent = `Could not delete the synced entry: ${error.message}`;
+          journalSyncStatus.classList.add("error");
+          return;
+        }
         journalEntries = journalEntries.filter((item) => item.id !== entry.id);
         persistJournal();
         renderJournal();
@@ -480,7 +560,7 @@
     journalSavedDialog.close();
     showJournalEntries();
   });
-  journalForm.addEventListener("submit", (event) => {
+  journalForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const reflection = journalReflection.value.trim();
     const prayer = journalPrayer.value.trim();
@@ -493,19 +573,42 @@
       id: editingJournalId ?? (window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
       reference: previous?.reference ?? journalReference(),
       verseText: previous?.verseText ?? selectedVerse?.text?.slice(0, 600) ?? "",
+      planDay: previous?.planDay ?? currentDay,
+      clientEntryId: previous?.clientEntryId ?? previous?.id,
       reflection: reflection.slice(0, 4000),
       prayer: prayer.slice(0, 2000),
       updatedAt: Date.now(),
     };
+    const saveButton = journalForm.querySelector('[type="submit"]');
+    saveButton.disabled = true;
+    try {
+      if (journalBackendActive) {
+        const payload = apiEntryPayload(entry);
+        await journalApi(previous ? `/${encodeURIComponent(payload.client_entry_id)}` : "", {
+          method: previous ? "PUT" : "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+    } catch (error) {
+      journalSyncStatus.textContent = `Could not sync this entry: ${error.message}. Your draft is still open.`;
+      journalSyncStatus.classList.add("error");
+      saveButton.disabled = false;
+      return;
+    }
+    saveButton.disabled = false;
     journalEntries = [entry, ...journalEntries.filter((item) => item.id !== entry.id)];
     persistJournal();
     renderJournal();
     journalDialog.close();
+    journalSavedMessage.textContent = journalBackendActive
+      ? "Your reflection is saved privately to your account."
+      : "Your reflection is saved privately on this device.";
     journalDetails.open = false;
     if (typeof journalSavedDialog.showModal === "function") journalSavedDialog.showModal();
     else journalSavedDialog.setAttribute("open", "");
   });
   renderJournal();
+  void activateJournalSync();
 
   function updateVisibleBookmarks() {
     content.querySelectorAll(".verse-bookmark").forEach((button) => {

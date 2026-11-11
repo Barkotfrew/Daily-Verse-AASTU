@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;500;600;700&family=Noto+Serif+Ethiopic:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
+    <script src="./config.js"></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
@@ -52,7 +53,7 @@
         <details id="reading-journal" class="saved-bookmarks">
           <summary>Private journal <span id="journal-count">0</span></summary>
           <div class="journal-panel">
-            <p class="journal-privacy">Saved in this browser profile on this device. Notes are not sent to the bot or shared, and may be lost if browser data is cleared.</p>
+            <p id="journal-sync-status" class="journal-privacy">Private journal entries are saved on this device.</p>
             <button id="journal-new" class="secondary-button journal-new" type="button">Write a reflection</button>
             <div id="journal-list" class="journal-list"></div>
           </div>
@@ -95,7 +96,7 @@
     <dialog id="journal-saved-dialog" class="journal-dialog journal-saved-dialog" aria-labelledby="journal-saved-title">
       <div class="journal-saved-content">
         <h2 id="journal-saved-title">Saved privately</h2>
-        <p>Your reflection is saved on this device.</p>
+        <p id="journal-saved-message">Your reflection is saved privately.</p>
         <div class="journal-saved-actions">
           <button id="journal-go-back" class="secondary-button" type="button">Go back</button>
           <button id="journal-view-entries" class="primary-button" type="button">View your private journals</button>

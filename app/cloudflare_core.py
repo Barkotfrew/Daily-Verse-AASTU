@@ -246,6 +246,8 @@ def supported_command(text: str) -> str | None:
         return "today"
     if command == "/progress" or text.strip() == "My Progress":
         return "progress"
+    if command == "/journal" or text.strip() == "My Journal":
+        return "journal"
     if command == "/leaderboard" or text.strip() == "Leaderboard":
         return "leaderboard"
     if command == "/settings" or text.strip() == "Settings":

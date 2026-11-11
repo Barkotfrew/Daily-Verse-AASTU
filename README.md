@@ -83,7 +83,7 @@ Inline mode is enabled in BotFather with `/setinline`. Test in Telegram by typin
 
 ## Cloudflare Pages Mini App
 
-The Mini App is hosted separately from the personal GitHub Pages site. The Pages-specific Wrangler config is `webapp/wrangler.toml`; keep it separate from the root `wrangler.toml`, which configures the Telegram Worker and D1 binding. In the Cloudflare Pages Git project, set the root directory to `webapp`, the build command to `python ../scripts/build_miniapp.py`, and the output directory to `dist`. The build script resolves the repository root from its own location and generates the static chapter assets into `webapp/dist`. Cloudflare's Git integration then rebuilds the reader when changes are pushed.
+The Mini App is hosted separately from the personal GitHub Pages site. The Pages-specific Wrangler config is `webapp/wrangler.toml`; keep it separate from the root `wrangler.toml`, which configures the Telegram Worker and D1 binding. In the Cloudflare Pages Git project, set the root directory to `webapp`, the build command to `python ../scripts/build_miniapp.py`, and the output directory to `dist`. Set the Pages build environment variable `DAILY_VERSE_API_URL` to the HTTPS base URL of the deployed Worker (for example, `https://<your-worker-subdomain>.workers.dev`). The build writes that value to generated `config.js`; do not commit a deployed API URL if you use separate environments. The build script resolves the repository root from its own location and generates the static chapter assets into `webapp/dist`.
 
 The builder creates chapter-sized assets and a copy of the shared reading plan under the generated `webapp/dist` directory. The `Read Chapters` button in a private chat opens the Mini App directly on that day's assigned chapters. For inline chapter searches, its button opens the requested chapter. The app fetches only the chapters it needs. Read checkmarks are stored in Telegram CloudStorage under one small key per reading-plan day (within Telegram's 1,024-key per-user limit); outside Telegram, browser local storage is used. These checkmarks do not mark the day complete in the bot's private progress record.
 
@@ -96,32 +96,43 @@ python -m http.server 8000 --directory webapp/dist
 
 Open `http://localhost:8000/?book=GEN&chapter=1` in a browser. After Cloudflare deploys, set `MINI_APP_URL=https://daily-verse-aastu.pages.dev` in the bot host's environment and restart the bot. The Bible text and Mini App are public; verify text redistribution rights before public release.
 
-## Cloudflare Worker migration (in progress)
+## Cloudflare Worker and D1 backend
 
-Cloudflare is the selected zero-cost hosting direction because the project already uses Pages. This is a separate backend migration: the running aiogram bot still uses long polling and local SQLite. The Worker remains an incomplete migration and is not the active bot backend. Do not point Telegram's production webhook at the Worker until the complete Worker flow has been tested in Cloudflare's runtime.
+Cloudflare Pages hosts the Mini App, and the Telegram webhook is currently routed to the Cloudflare Worker. The aiogram bot and SQLite database remain useful for local development; changes to that local database do not automatically reach D1. D1 is the production Worker database.
 
-The Worker supports private signup, `/today`, `/progress`, `/leaderboard`, `/settings`, `/help`, paged `/plan` browsing, the assigned-reading Mini App button, bilingual English/Amharic reference queries in inline mode, and personal completion. `Mark as Read` inserts one `(Telegram user, plan day)` completion, so repeated taps do not increase progress twice. `/progress` includes current and best consecutive-day streaks derived from those completion rows; a missed day ends the streak without changing completion history. `/settings` shows the user's profile, toggles reminder preference and explicit leaderboard opt-in, allows editing the user's name/year/department, and offers account deletion with a confirmation step. The main menu places Leaderboard beside My Progress. The same top ten opted-in readers are shown to each user, identified by chosen name, study year, and completed-reading count. Progress remains private. Bible text is fetched one chapter at a time from the same static Pages assets used by the Mini App; the Worker does not keep a second Bible copy in D1. Inline results use the verified Amharic source text and label it accordingly.
+The Worker supports private signup, `/today`, `/progress`, `/journal`, `/leaderboard`, `/settings`, `/help`, paged `/plan` browsing, the assigned-reading Mini App button, bilingual English/Amharic reference queries in inline mode, and personal completion. The Mini App journal API validates Telegram Web App `initData` and restricts every read, write, and delete to the registered Telegram account. Once the Pages build has `DAILY_VERSE_API_URL` configured, the first authenticated use copies old device-local journal entries to D1 idempotently and then loads entries from the account; bot and Mini App journals share the same private D1 table. If API configuration or authentication is unavailable, entries stay saved on-device. Reading marks and bookmarks saved by the Mini App remain device/Telegram CloudStorage data and are not part of the SQLite-to-D1 importer. `Mark as Read` inserts one `(Telegram user, plan day)` completion, so repeated taps do not increase progress twice. `/progress` includes current and best consecutive-day streaks derived from those completion rows; a missed day ends the streak without changing completion history. `/journal` stores private reflection entries in D1, offers day and optional verse/prayer fields, and scopes every view to its owner. `/settings` shows the user's profile, toggles reminder preference and explicit leaderboard opt-in, allows editing the user's name/year/department, and offers account deletion with a confirmation step. The same top ten opted-in readers are shown to each user, identified by chosen name, study year, and completed-reading count. Progress and journal entries are private. Bible text is fetched one chapter at a time from the same static Pages assets used by the Mini App; the Worker does not keep a second Bible copy in D1. Inline results use the verified Amharic source text and label it accordingly.
 
 Worker reminders use an at-least-once Cloudflare Queue with a D1 delivery ledger and an atomic claim before sending. The Cron handler runs through the 06:00, 12:00, and 18:00 EAT hour windows, processing up to 100 registered, reminder-enabled users per minute in ascending Telegram ID order; for the expected 1,200 users each window queues the batch over about 12 minutes. Each time has its own run and delivery record. Reminders include an “Open today's reading” button and continue after completion. The final reminder for a date is never inferred beyond the plan. A network failure after Telegram accepts a message but before its response reaches the Worker is inherently ambiguous because Telegram's send API has no idempotency key; the ledger prevents ordinary duplicate queue deliveries and restarts, while retries may repeat only in that ambiguous failure case.
 
-Reminder scheduling is intentionally **not enabled in `wrangler.toml` yet**. First create a Cloudflare Queue named `daily-verse-reminders`, then add the following bindings and trigger to `wrangler.toml`; only do this after the Worker and Queue have been tested in Cloudflare's runtime:
+The root `wrangler.toml` configures the reminder Queue and Cron schedule. Create the Queue once, apply the D1 migrations, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` as Worker secrets, and deploy the Worker configuration to activate it. The Cron expression checks the three EAT hours; the Worker sends only at 06:00, 12:00, and 18:00 EAT. Queue delivery has at-least-once semantics, so the D1 delivery ledger protects against normal duplicate sends. Deployment activates recurring Telegram reminders for registered users with reminders enabled.
 
-```toml
-[[queues.producers]]
-queue = "daily-verse-reminders"
-binding = "REMINDER_QUEUE"
-
-[[queues.consumers]]
-queue = "daily-verse-reminders"
-max_batch_size = 20
-max_batch_timeout = 5
-max_retries = 5
-
-[triggers]
-crons = ["* 3,9,15 * * *"] # 03, 09, 15 UTC hourly windows are 06, 12, 18 EAT
+```powershell
+npx wrangler queues create daily-verse-reminders
+npx wrangler d1 migrations apply daily-verse-aastu --remote
+npx wrangler deploy
 ```
 
-Apply migration `0008_reminder_schedule_slots.sql` along with the earlier D1 migrations before testing the scheduler. The migration preserves old once-daily records in the 06:00 slot. The first registration command and all reminders remain separate from the current polling bot until a deliberate backend switch; do not set Telegram's production webhook to the Worker as part of local testing.
+The Worker sends the direct “Open today's reading” button and continues to respect each user's reminder preference. Review the D1 cohort and confirm the Queue exists before deploying; deployment activates recurring Telegram reminders.
+
+### Import existing local profiles, progress, and journal entries
+
+Local aiogram/SQLite records are not copied into D1 automatically. The exporter below reads the SQLite file in read-only mode and creates a **private, ignored SQL file**. It includes profiles and preferences, completed plan days, and journal entries. It does not include reminder-delivery history. The generated SQL is merge-only and repeatable, and it preserves local journal IDs as source keys so the same entry is not imported twice. Existing Mini App reading marks stored only in a browser or Telegram CloudStorage are separate and are not included by this SQLite export.
+
+First ensure D1 has the reading plan and apply migration `0009_journal_entries.sql` with the other migrations. Then prepare and inspect the personal-data file locally:
+
+```powershell
+python scripts/export_local_data_to_d1.py `
+  --database data/daily_verse.sqlite3 `
+  --output data/private_d1_import.sql
+```
+
+The output path is ignored by Git. Review the file locally; do not paste it into chat or commit it. For an existing D1 account, the import fills missing profile fields and adds missing completions and journals; it preserves current D1 reminder and leaderboard preferences. Execute it against remote D1 only after confirming that the existing users' private profiles, progress, and journal entries should be transferred:
+
+```powershell
+npx wrangler d1 execute daily-verse-aastu --remote --file=data/private_d1_import.sql
+```
+
+After confirming the import, securely delete the generated SQL file. Account deletion continues to remove a user's profile, completions, and journal entries from D1 through foreign-key cascades.
 
 For Worker inline search, set Telegram's webhook to include `inline_query` updates only after the Worker deployment is intentionally being tested. Registered users can query references such as `Genesis 1:1`, `Psalm 23:1`, `ዘፍጥረት 1`, and `መዝሙረ ዳዊት 23:1` in any supported chat. Chapter results offer a button to open the full chapter in the Mini App. The `/today` response and selected plan days open the assigned chapters there. These links depend on the matching chapter assets being deployed at `MINI_APP_URL`.
 
@@ -149,6 +160,6 @@ npx wrangler d1 execute daily-verse-aastu --local --file=cloudflare/worker/seed/
 uv run pywrangler dev
 ```
 
-The production polling bot remains separate; do not register a Telegram webhook yet. Before a future test deployment, migrate the schema, import the plan, set credentials as Worker secrets, and verify every bot flow. Do not enable the Queue binding or Cron trigger until the Worker and scheduler have been tested in the deployed runtime. The Worker runtime uses Python through Pyodide; verify package compatibility before choosing Python dependencies.
+The Worker uses Python through Pyodide; verify package compatibility before adding Python dependencies. The local bot environment and Cloudflare Worker deployment remain separate: local SQLite edits do not update D1, and D1 changes do not rewrite local records.
 
 English Bible text still requires a separately licensed source.
