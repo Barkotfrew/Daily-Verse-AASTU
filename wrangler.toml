@@ -3,6 +3,9 @@ main = "app/cloudflare_worker.py"
 compatibility_date = "2026-11-03"
 compatibility_flags = ["python_workers"]
 
+[observability]
+enabled = true
+
 [vars]
 MINI_APP_URL = "https://daily-verse-aastu.pages.dev"
 
