@@ -265,7 +265,7 @@ def build_router(
         if message.from_user is None:
             return
         is_new_user = register_user(database_path, message.from_user.id, message.chat.id)
-        if is_new_user:
+        if is_new_user or not user_is_registered(database_path, message.from_user.id):
             await message.answer(WELCOME_INTRO)
         if not user_is_registered(database_path, message.from_user.id):
             prompts = {

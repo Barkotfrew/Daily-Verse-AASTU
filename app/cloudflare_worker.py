@@ -652,7 +652,7 @@ class Default(WorkerEntrypoint):
                     "SET private_chat_id = excluded.private_chat_id"
                 ).bind(user_id, chat_id).run()
                 field = next_signup_field(existing_user) if existing_user is not None else "display_name"
-                if existing_user is None:
+                if existing_user is None or field is not None:
                     await self._send_message(chat_id, WELCOME_INTRO)
                 if field is not None:
                     await self._send_message(
