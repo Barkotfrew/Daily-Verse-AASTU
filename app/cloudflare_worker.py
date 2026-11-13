@@ -8,8 +8,6 @@ from datetime import date
 from urllib.parse import parse_qsl, urlparse
 
 from workers import Response, WorkerEntrypoint, fetch
-from js import Object
-from pyodide.ffi import to_js
 
 try:
     from app.bible import JsonBibleRepository
@@ -1230,16 +1228,11 @@ class Default(WorkerEntrypoint):
         token = getattr(self.env, "TELEGRAM_BOT_TOKEN", "")
         if not token:
             raise RuntimeError("Telegram bot token is not configured")
-        options = to_js(
-            {
-                "method": "POST",
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps(payload, ensure_ascii=False),
-            },
-            dict_converter=Object.fromEntries,
-        )
         response = await fetch(
-            f"https://api.telegram.org/bot{token}/{method}", options
+            f"https://api.telegram.org/bot{token}/{method}",
+            method="POST",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(payload, ensure_ascii=False),
         )
         result = await response.json()
         if not response.ok or not result.get("ok"):
