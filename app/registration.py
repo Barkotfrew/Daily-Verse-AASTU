@@ -4,12 +4,25 @@ from pathlib import Path
 
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 
 from app.cloudflare_core import is_start_command
-from app.database import save_signup_field, signup_stage, user_has_account, user_is_registered
+from app.database import (
+    display_name,
+    save_signup_field,
+    signup_stage,
+    user_has_account,
+    user_is_registered,
+)
 from app.keyboards import MAIN_MENU
 from app.messages import (
+    ACADEMIC_YEAR_OPTIONS,
     REGISTRATION_COMPLETE,
     REGISTRATION_DEPARTMENT_INVALID,
     REGISTRATION_DEPARTMENT_PROMPT,
@@ -30,6 +43,20 @@ _INVALID = {
     "year": REGISTRATION_YEAR_INVALID,
     "department": REGISTRATION_DEPARTMENT_INVALID,
 }
+
+
+def registration_prompt_markup(stage: str):
+    if stage == "year":
+        options = ACADEMIC_YEAR_OPTIONS
+        return ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text=options[index]) for index in range(start, min(start + 2, len(options)))]
+                for start in range(0, len(options), 2)
+            ],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        )
+    return ReplyKeyboardRemove()
 
 
 class RegistrationGate(BaseMiddleware):
@@ -59,18 +86,36 @@ class RegistrationGate(BaseMiddleware):
             stage = signup_stage(self.database_path, user.id)
             if event.text and not event.text.strip().startswith("/"):
                 if stage in _PROMPTS and save_signup_field(
-                    self.database_path, user.id, stage, event.text
+                    self.database_path,
+                    user.id,
+                    stage,
+                    event.text,
+                    allowed_values=ACADEMIC_YEAR_OPTIONS if stage == "year" else None,
                 ):
                     next_stage = signup_stage(self.database_path, user.id)
                     if next_stage == "complete":
-                        await event.answer(REGISTRATION_COMPLETE, reply_markup=MAIN_MENU)
+                        await event.answer(
+                            REGISTRATION_COMPLETE.format(
+                                name=display_name(self.database_path, user.id) or "friend"
+                            ),
+                            reply_markup=MAIN_MENU,
+                        )
                     else:
-                        await event.answer(_PROMPTS[next_stage])
+                        await event.answer(
+                            _PROMPTS[next_stage],
+                            reply_markup=registration_prompt_markup(next_stage),
+                        )
                 else:
-                    await event.answer(_INVALID.get(stage, REGISTRATION_NAME_INVALID))
+                    await event.answer(
+                        _INVALID.get(stage, REGISTRATION_NAME_INVALID),
+                        reply_markup=registration_prompt_markup(stage),
+                    )
                 return None
             stage = signup_stage(self.database_path, user.id)
-            await event.answer(_PROMPTS.get(stage, REGISTRATION_NAME_PROMPT))
+            await event.answer(
+                _PROMPTS.get(stage, REGISTRATION_NAME_PROMPT),
+                reply_markup=registration_prompt_markup(stage),
+            )
         elif isinstance(event, CallbackQuery):
             try:
                 await event.answer(REGISTRATION_REQUIRED, show_alert=True)
@@ -84,5 +129,8 @@ class RegistrationGate(BaseMiddleware):
                 and user_has_account(self.database_path, user.id)
             ):
                 stage = signup_stage(self.database_path, user.id)
-                await event.message.answer(_PROMPTS.get(stage, REGISTRATION_NAME_PROMPT))
+                await event.message.answer(
+                    _PROMPTS.get(stage, REGISTRATION_NAME_PROMPT),
+                    reply_markup=registration_prompt_markup(stage),
+                )
         return None

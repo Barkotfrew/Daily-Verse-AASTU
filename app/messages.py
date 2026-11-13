@@ -1,36 +1,75 @@
 """Approved, fixed message templates for community reminders."""
 
 DAILY_REMINDER = (
-    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-    "የዛሬ ንባብ · ቀን {day}\n"
+    "ሰላም የAASTU ECSF ቤተሰብ! 👋\n"
+    "📖 Today's Bible Reading · Day {day}\n"
     "{ethiopian_date} · {gregorian_date}\n"
-    "{reading}"
+    "{reading}\n\n"
+    "Take a little time today to read and reflect on God’s Word. "
+    "We’re growing together, one day at a time. 💛\n"
+    "— Daily Verse | AASTU ECSF"
 )
 
-REGISTRATION_REQUIRED = "Please send /start first to create your account."
+REGISTRATION_REQUIRED = "Please send /start first so we can get you set up. 📖"
+
+WELCOME_INTRO = (
+    "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n\n"
+    "እንኳን ወደ AASTU ECSF የመጽሐፍ ቅዱስ ንባብ መተግበሪያ በደህና መጡ! 📖\n"
+    "በዚህ ቦት፦\n"
+    "📖 የዕለቱን ንባብ ማየት እና የመጽሐፍ ቅዱስ ምዕራፎችን ማንበብ ይችላሉ።\n"
+    "🗓️ የጋራውን የንባብ እቅድ መከታተል እና ንባብዎን እንደጨረሱ ምልክት ማድረግ ይችላሉ።\n"
+    "📝 ከንባብ ቀን ጋር የተያያዘ የግል ማስታወሻ ወይም ጸሎት መጻፍ ይችላሉ።\n"
+    "🔔 ከSettings የዕለታዊ ማስታወሻዎችን ማብራት ወይም ማጥፋት ይችላሉ።\n"
+    "🏆 በመሪ ሰሌዳው መሳተፍ ከፈለጉ ከSettings በፈቃድዎ ማብራት ይችላሉ።\n\n"
+    "🔒 የግል ማስታወሻዎችዎ በመሪ ሰሌዳ ላይ አይታዩም።\n\n"
+    "ከተመዘገቡ በኋላ የዕለቱን ንባብ ከታች ካሉት አማራጮች ይክፈቱ።\n\n"
+    "Welcome to the AASTU ECSF Bible Reading App! 📖\n"
+    "With this bot, you can:\n"
+    "📖 View the daily reading and read Bible chapters.\n"
+    "🗓️ Follow the shared reading plan and mark readings as complete.\n"
+    "📝 Write a private note or prayer connected to a reading day.\n"
+    "🔔 Turn daily reminders on or off in Settings.\n"
+    "🏆 Choose to join the leaderboard in Settings.\n\n"
+    "🔒 Your private journal entries are not shown on the leaderboard.\n\n"
+    "After registering, choose an option below to open the day’s reading."
+)
 
 REGISTRATION_NAME_PROMPT = (
-    "What is your name?\n"
-    "Your name and study year appear on the leaderboard only if you join from Settings."
+    "ለመመዝገብ ምን ስም እንጠቀም?\n"
+    "ስምዎና የትምህርት ዓመትዎ በመሪ ሰሌዳው ላይ የሚታዩት ከSettings ውስጥ መሳተፍን ከመረጡ ብቻ ነው።"
 )
 
-REGISTRATION_NAME_INVALID = "Please enter your name using 2 to 64 characters."
+REGISTRATION_NAME_INVALID = "እባክዎ ከ2 እስከ 64 ቁምፊዎች ያሉትን ስም ያስገቡ።"
 
+ACADEMIC_YEAR_OPTIONS = (
+    "1st",
+    "2nd",
+    "3rd",
+    "4th",
+    "5th",
+    "Out of batch",
+    "Graduate",
+    "Visitor",
+)
 REGISTRATION_YEAR_PROMPT = (
-    "What year of study are you in? For example: 2nd year. "
-    "It appears on the leaderboard only if you choose to join."
+    "የትምህርት ዓመትዎን ከታች ካሉት አማራጮች ይምረጡ።\n"
+    "Choose your year or status from the options below."
 )
-REGISTRATION_YEAR_INVALID = "Please enter your year of study, such as 2 or 2nd year."
+REGISTRATION_YEAR_INVALID = "እባክዎ ከታች ካሉት የትምህርት ዓመት ወይም ሁኔታ አማራጮች አንዱን ይምረጡ።"
 
-REGISTRATION_DEPARTMENT_PROMPT = "What is your department?"
-REGISTRATION_DEPARTMENT_INVALID = "Please enter a department name between 2 and 80 characters."
+REGISTRATION_DEPARTMENT_PROMPT = "የትምህርት ክፍልዎ (Department) ምንድን ነው?"
+REGISTRATION_DEPARTMENT_INVALID = "እባክዎ ከ2 እስከ 80 ቁምፊዎች ያሉትን የክፍል ስም ያስገቡ።"
 
 REGISTRATION_COMPLETE = (
-    "Thanks, your signup is complete. Welcome to Daily Verse. Choose an option below."
+    "Welcome to Daily Verse — AASTU ECSF, {name}! 📖\n\n"
+    "We’re glad you’re here. Let’s grow in God’s Word together, one day at a time.\n\n"
+    "Choose “Today’s Reading” below whenever you’re ready to begin."
 )
 
 REGISTRATION_EXISTING = (
-    "Welcome back, {name}. Choose an option below."
+    "Welcome back, {name}! 🙌\n\n"
+    "We’re glad you’re here. Pick up where you left off, or open today’s reading below. "
+    "Take it one day at a time."
 )
 
 DELETE_ACCOUNT_PROMPT = (

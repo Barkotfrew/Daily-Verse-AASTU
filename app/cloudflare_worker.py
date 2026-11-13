@@ -52,20 +52,19 @@ from cloudflare_core import (
     today_keyboard,
     verify_webhook_secret,
 )
-from messages import REGISTRATION_COMPLETE, REGISTRATION_EXISTING, REGISTRATION_REQUIRED
-
-REGISTRATION_NAME_PROMPT = (
-    "What is your name?\n"
-    "Your name and study year appear on the leaderboard only if you join from Settings."
+from messages import (
+    ACADEMIC_YEAR_OPTIONS,
+    REGISTRATION_COMPLETE,
+    REGISTRATION_DEPARTMENT_INVALID,
+    REGISTRATION_DEPARTMENT_PROMPT,
+    REGISTRATION_EXISTING,
+    REGISTRATION_NAME_INVALID,
+    REGISTRATION_NAME_PROMPT,
+    REGISTRATION_REQUIRED,
+    REGISTRATION_YEAR_INVALID,
+    REGISTRATION_YEAR_PROMPT,
+    WELCOME_INTRO,
 )
-REGISTRATION_NAME_INVALID = "Please enter your name using 2 to 64 characters."
-REGISTRATION_YEAR_PROMPT = (
-    "What year of study are you in? For example: 2nd year. "
-    "It appears on the leaderboard only if you choose to join."
-)
-REGISTRATION_DEPARTMENT_PROMPT = "What is your department?"
-REGISTRATION_YEAR_INVALID = "Please enter your year of study, such as 2 or 2nd year."
-REGISTRATION_DEPARTMENT_INVALID = "Please enter a department name between 2 and 80 characters."
 PROFILE_EDIT_PROMPTS = {
     "display_name": "Send the name you want Daily Verse to use (2–64 characters).",
     "academic_year": "Send your year of study (for example, 2 or 2nd year).",
@@ -98,6 +97,19 @@ def signup_prompt(field):
         "academic_year": REGISTRATION_YEAR_PROMPT,
         "department": REGISTRATION_DEPARTMENT_PROMPT,
     }.get(field, REGISTRATION_NAME_PROMPT)
+
+
+def signup_prompt_markup(field):
+    if field != "academic_year":
+        return {"remove_keyboard": True}
+    return {
+        "keyboard": [
+            list(ACADEMIC_YEAR_OPTIONS[index:index + 2])
+            for index in range(0, len(ACADEMIC_YEAR_OPTIONS), 2)
+        ],
+        "resize_keyboard": True,
+        "one_time_keyboard": True,
+    }
 
 
 def format_worker_settings(settings):
@@ -600,8 +612,10 @@ class Default(WorkerEntrypoint):
                     "department": (2, 80, REGISTRATION_DEPARTMENT_INVALID),
                 }[field]
                 value = normalize_signup_value(text, minimum, maximum)
+                if field == "academic_year" and value not in ACADEMIC_YEAR_OPTIONS:
+                    value = None
                 if value is None:
-                    await self._send_message(chat_id, invalid)
+                    await self._send_message(chat_id, invalid, signup_prompt_markup(field))
                 else:
                     await self.env.DB.prepare(
                         f"UPDATE users SET {field} = ?, private_chat_id = ? "
@@ -613,9 +627,17 @@ class Default(WorkerEntrypoint):
                     ).bind(user_id).first()
                     next_field = next_signup_field(updated) if updated else None
                     if next_field is None:
-                        await self._send_message(chat_id, REGISTRATION_COMPLETE, MAIN_MENU)
+                        await self._send_message(
+                            chat_id,
+                            REGISTRATION_COMPLETE.format(
+                                name=(updated.get("display_name") if updated else None) or "friend"
+                            ),
+                            MAIN_MENU,
+                        )
                     else:
-                        await self._send_message(chat_id, signup_prompt(next_field))
+                        await self._send_message(
+                            chat_id, signup_prompt(next_field), signup_prompt_markup(next_field)
+                        )
                 return Response("OK")
 
             if command == "start":
@@ -631,8 +653,12 @@ class Default(WorkerEntrypoint):
                     "SET private_chat_id = excluded.private_chat_id"
                 ).bind(user_id, chat_id).run()
                 field = next_signup_field(existing_user) if existing_user is not None else "display_name"
+                if existing_user is None:
+                    await self._send_message(chat_id, WELCOME_INTRO)
                 if field is not None:
-                    await self._send_message(chat_id, signup_prompt(field))
+                    await self._send_message(
+                        chat_id, signup_prompt(field), signup_prompt_markup(field)
+                    )
                 else:
                     await self._send_message(
                         chat_id,
@@ -647,7 +673,10 @@ class Default(WorkerEntrypoint):
                 registered = user is not None and next_signup_field(user) is None
                 if registration_required(command, registered):
                     if user is not None:
-                        await self._send_message(chat_id, signup_prompt(next_signup_field(user)))
+                        field = next_signup_field(user)
+                        await self._send_message(
+                            chat_id, signup_prompt(field), signup_prompt_markup(field)
+                        )
                     else:
                         await self._send_message(chat_id, REGISTRATION_REQUIRED)
                     return Response("OK")
@@ -755,7 +784,8 @@ class Default(WorkerEntrypoint):
                     reply_markup = MAIN_MENU
                 elif command == "help":
                     response_message = (
-                        "Use /today to see today's assigned reading, /plan to browse "
+                        WELCOME_INTRO + "\n\n"
+                        + "Use /today to see today's assigned reading, /plan to browse "
                         "the full plan, or /plan 17 to open the page containing Day 17. "
                         "Open a plan day to read its chapters and mark it complete. "
                         "Use /progress to see your reading record and streak, "

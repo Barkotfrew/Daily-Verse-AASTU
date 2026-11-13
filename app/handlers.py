@@ -47,6 +47,7 @@ from app.messages import (
     DELETE_ACCOUNT_PROMPT,
     REGISTRATION_COMPLETE,
     REGISTRATION_EXISTING,
+    WELCOME_INTRO,
     REGISTRATION_NAME_PROMPT,
     REGISTRATION_YEAR_PROMPT,
     REGISTRATION_DEPARTMENT_PROMPT,
@@ -55,7 +56,7 @@ from app.messages import (
     PROFILE_EDIT_SAVED,
 )
 from app.keyboards import MAIN_MENU
-from app.registration import RegistrationGate
+from app.registration import RegistrationGate, registration_prompt_markup
 from app.streaks import streak_counts, streak_progress_text
 from app.bible import JsonBibleRepository, format_chapter_messages
 from app.inline_search import parse_chapter_start_parameter, search_inline
@@ -264,14 +265,18 @@ def build_router(
         if message.from_user is None:
             return
         is_new_user = register_user(database_path, message.from_user.id, message.chat.id)
+        if is_new_user:
+            await message.answer(WELCOME_INTRO)
         if not user_is_registered(database_path, message.from_user.id):
             prompts = {
                 "name": REGISTRATION_NAME_PROMPT,
                 "year": REGISTRATION_YEAR_PROMPT,
                 "department": REGISTRATION_DEPARTMENT_PROMPT,
             }
+            stage = signup_stage(database_path, message.from_user.id)
             await message.answer(
-                prompts.get(signup_stage(database_path, message.from_user.id), REGISTRATION_NAME_PROMPT)
+                prompts.get(stage, REGISTRATION_NAME_PROMPT),
+                reply_markup=registration_prompt_markup(stage),
             )
             return
         chapter_reference = parse_chapter_start_parameter(command.args)
@@ -294,7 +299,9 @@ def build_router(
                 await message.answer(text)
             return
         await message.answer(
-            REGISTRATION_COMPLETE
+            REGISTRATION_COMPLETE.format(
+                name=display_name(database_path, message.from_user.id) or "friend"
+            )
             if is_new_user
             else REGISTRATION_EXISTING.format(
                 name=display_name(database_path, message.from_user.id) or "friend"
@@ -878,7 +885,8 @@ def build_router(
     @router.message(F.text == "Help")
     async def help_message(message: Message) -> None:
         await message.answer(
-            "Use /today to see the shared reading, /plan to browse the full plan "
+            WELCOME_INTRO + "\n\n"
+            + "Use /today to see the shared reading, /plan to browse the full plan "
             "or /plan 17 to open the page containing Day 17, "
             "and /progress to see your private completed-plan history. "
             "Use /journal to write a private reflection or prayer for a reading day. "

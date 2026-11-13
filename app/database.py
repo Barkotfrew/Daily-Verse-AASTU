@@ -184,7 +184,11 @@ def signup_stage(database_path: str | Path, telegram_user_id: int) -> str | None
 
 
 def save_signup_field(
-    database_path: str | Path, telegram_user_id: int, field: str, value: str
+    database_path: str | Path,
+    telegram_user_id: int,
+    field: str,
+    value: str,
+    allowed_values: tuple[str, ...] | None = None,
 ) -> bool:
     """Save one validated field only when it is the user's current signup step."""
     rules = {
@@ -196,7 +200,7 @@ def save_signup_field(
         return False
     column, minimum, maximum = rules[field]
     cleaned = normalize_signup_value(value, minimum, maximum)
-    if cleaned is None:
+    if cleaned is None or (allowed_values is not None and cleaned not in allowed_values):
         return False
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
