@@ -486,7 +486,7 @@ def build_router(
                 await callback.message.answer(text)
 
     @router.message(Command("progress"))
-    @router.message(F.text == "My Progress")
+    @router.message(F.text.in_({"My Progress", "My Reading Journey 🌱"}))
     async def progress(message: Message) -> None:
         if message.chat.type != "private":
             await message.answer("For privacy, open Daily Verse in a private chat to view progress.")
@@ -514,14 +514,14 @@ def build_router(
                 history_lines.append(
                     f"Day {day} · {completed_at[:10]} — {entry.reading}"
                 )
-        history_text = "\n".join(history_lines) or "No readings marked complete yet."
+        history_text = "\n".join(history_lines) or "No completed days yet. Your journey starts with the next reading!"
         await message.answer(
-            f"My Progress\n{streak_progress_text(current_streak, best_streak)}\n\n"
-            f"Reading plan: {len(days)} of {plan.total_days} assigned readings marked complete "
-            f"({percentage:.1f}%).\n\n"
-            "Recent reading plan history\n"
-            "These are plan days you marked complete, not whole-Bible coverage.\n"
+            f"🌱 Your Reading Journey\n{streak_progress_text(current_streak, best_streak)}\n\n"
+            f"📖 {len(days)} of {plan.total_days} assigned readings completed ({percentage:.1f}%).\n"
+            "Every reading is a step forward—keep going at your own pace!\n\n"
+            "Recently completed\n"
             f"{history_text}"
+            "\n\nThis tracks the shared reading plan, not whole-Bible coverage."
         )
 
     async def send_journal(message: Message) -> None:
@@ -889,7 +889,7 @@ def build_router(
             + "Use /today to see the shared reading, /plan to browse the full plan "
             "or /plan 17 to open the page containing Day 17, "
             "and /progress to see your private completed-plan history. "
-            "Use /journal to write a private reflection or prayer for a reading day. "
+            "Open the Mini App to write private reflections or prayers. "
             "Open Settings to manage reminders or delete your account. "
             "You can mark earlier readings complete from the plan."
         )

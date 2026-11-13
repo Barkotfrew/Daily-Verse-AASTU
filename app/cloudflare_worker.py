@@ -129,8 +129,7 @@ def format_worker_settings(settings):
 MAIN_MENU = {
     "keyboard": [
         [{"text": "Today's Reading"}, {"text": "Reading Plan"}],
-        [{"text": "My Progress"}, {"text": "Leaderboard"}],
-        [{"text": "My Journal"}],
+        [{"text": "My Reading Journey 🌱"}, {"text": "Leaderboard"}],
         [{"text": "Settings"}],
         [{"text": "Help"}],
     ],
@@ -788,9 +787,9 @@ class Default(WorkerEntrypoint):
                         + "Use /today to see today's assigned reading, /plan to browse "
                         "the full plan, or /plan 17 to open the page containing Day 17. "
                         "Open a plan day to read its chapters and mark it complete. "
-                        "Use /progress to see your reading record and streak, "
-                        "/leaderboard to view readers who opted in, /journal for your private "
-                        "reflections, and /settings to manage reminders and leaderboard privacy."
+                        "Use /progress to see your reading journey and streak, "
+                        "/leaderboard to view readers who opted in, and /settings to manage "
+                        "reminders and leaderboard privacy. Open the Mini App for private journaling."
                     )
                     reply_markup = MAIN_MENU
                 else:

@@ -244,7 +244,7 @@ def supported_command(text: str) -> str | None:
         return "start"
     if command == "/today" or text.strip() == "Today's Reading":
         return "today"
-    if command == "/progress" or text.strip() == "My Progress":
+    if command == "/progress" or text.strip() in {"My Progress", "My Reading Journey 🌱"}:
         return "progress"
     if command == "/journal" or text.strip() == "My Journal":
         return "journal"
@@ -355,11 +355,15 @@ def format_progress_message(
 ) -> str:
     """Format a user's own private completion summary."""
     percentage = completed / total * 100 if total else 0
-    history = ", ".join(str(day) for day in recent_days) or "None yet"
+    history = ", ".join(f"Day {day}" for day in recent_days) or "No completed days yet"
     streak_section = f"\n{streak}\n" if streak else ""
     return (
-        f"My Progress{streak_section}\n{completed} of {total} readings completed "
-        f"({percentage:.1f}%).\nRecent completed days: {history}"
+        f"🌱 Your Reading Journey{streak_section}\n"
+        f"📖 {completed} of {total} assigned readings completed ({percentage:.1f}%).\n"
+        "Every reading is a step forward—keep going at your own pace!\n\n"
+        "Recently completed\n"
+        f"{history}\n\n"
+        "This tracks the shared reading plan, not whole-Bible coverage."
     )
 
 
