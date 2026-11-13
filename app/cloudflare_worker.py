@@ -64,6 +64,7 @@ from messages import (
     REGISTRATION_YEAR_INVALID,
     REGISTRATION_YEAR_PROMPT,
     WELCOME_INTRO,
+    HELP_COMMANDS,
 )
 PROFILE_EDIT_PROMPTS = {
     "display_name": "Send the name you want Daily Verse to use (2–64 characters).",
@@ -693,18 +694,21 @@ class Default(WorkerEntrypoint):
                         "SELECT plan_day, ethiopian_date, reading, gregorian_date "
                         "FROM reading_plan WHERE gregorian_date = ?"
                     ).bind(today).first()
-                    response_message = format_today_message(entry, current_date)
                     if entry:
                         completed = await self.env.DB.prepare(
                             "SELECT 1 AS completed FROM reading_completions "
                             "WHERE telegram_user_id = ? AND plan_day = ?"
                         ).bind(user_id, entry["plan_day"]).first()
+                        response_message = format_today_message(
+                            entry, current_date, completed is not None
+                        )
                         reply_markup = today_keyboard(
                             getattr(self.env, "MINI_APP_URL", ""),
                             int(entry["plan_day"]),
                             completed is not None,
                         )
                     else:
+                        response_message = format_today_message(entry, current_date)
                         reply_markup = MAIN_MENU
                 elif command == "plan":
                     total_row = await self.env.DB.prepare(
@@ -782,15 +786,7 @@ class Default(WorkerEntrypoint):
                     response_message = format_leaderboard_message(rows)
                     reply_markup = MAIN_MENU
                 elif command == "help":
-                    response_message = (
-                        WELCOME_INTRO + "\n\n"
-                        + "Use /today to see today's assigned reading, /plan to browse "
-                        "the full plan, or /plan 17 to open the page containing Day 17. "
-                        "Open a plan day to read its chapters and mark it complete. "
-                        "Use /progress to see your reading journey and streak, "
-                        "/leaderboard to view readers who opted in, and /settings to manage "
-                        "reminders and leaderboard privacy. Open the Mini App for private journaling."
-                    )
+                    response_message = WELCOME_INTRO + "\n\n" + HELP_COMMANDS
                     reply_markup = MAIN_MENU
                 else:
                     stats = await self.env.DB.prepare(
@@ -1036,6 +1032,18 @@ class Default(WorkerEntrypoint):
                 keyboard = today_keyboard(
                     getattr(self.env, "MINI_APP_URL", ""), day, completed=True
                 )
+                if str(message.get("text", "")).startswith("📖 TODAY’S READING"):
+                    today_entry = await self.env.DB.prepare(
+                        "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+                        "FROM reading_plan WHERE plan_day = ?"
+                    ).bind(day).first()
+                    if today_entry:
+                        await self._edit_message(
+                            chat["id"], message["message_id"],
+                            format_today_message(today_entry, current_eat_date(), completed=True),
+                            keyboard,
+                        )
+                        return True
             await self._edit_reply_markup(chat["id"], message["message_id"], keyboard)
             return True
 

@@ -14,24 +14,36 @@ REGISTRATION_REQUIRED = "Please send /start first so we can get you set up. 📖
 
 WELCOME_INTRO = (
     "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n\n"
-    "እንኳን ወደ AASTU ECSF የመጽሐፍ ቅዱስ ንባብ መተግበሪያ በደህና መጡ! 📖\n"
-    "📌 ይህን ቦት በመጠቀም፦\n\n"
-    "1️⃣ የዕለቱን ንባብ እና የመጽሐፍ ቅዱስ ምዕራፎችን ማንበብ ይችላሉ።\n"
-    "2️⃣ የጋራውን የንባብ እቅድ ተከታትለው ንባብዎን ሲጨርሱ ምልክት ማድረግ ይችላሉ።\n"
-    "3️⃣ ከንባብ ቀን ጋር የተያያዘ የግል ማስታወሻ ወይም ጸሎት በMini App ውስጥ መጻፍ ይችላሉ።\n\n"
-    "🔔 የዕለታዊ ማስታወሻዎችን ከSettings ማብራት ወይም ማጥፋት ይችላሉ።\n"
-    "🏆 በመሪ ሰሌዳው ላይ መታየት ከፈለጉ ከSettings በፈቃድዎ ይቀላቀሉ።\n\n"
+    "እንኳን ወደ AASTU ECSF የመጽሐፍ ቅዱስ ንባብ መተግበሪያ በደህና መጡ!\n\n"
+    "📌በዚህ ቦት፦\n\n"
+    "📖 የዕለቱን ንባብ ማየት እና የመጽሐፍ ቅዱስ ምዕራፎችን ማንበብ ይችላሉ።\n"
+    "🗓 የጋራውን የንባብ እቅድ መከታተል እና ንባብዎን እንደጨረሱ ምልክት ማድረግ ይችላሉ።\n"
+    "📝 ከንባብ ቀን ጋር የተያያዘ የግል ማስታወሻ ወይም ጸሎት በMini App ውስጥ መጻፍ ይችላሉ።\n"
+    "🔔 ከSettings የዕለታዊ ማስታወሻዎችን ማብራት ወይም ማጥፋት ይችላሉ።\n"
+    "🏆 በመሪ ሰሌዳው መሳተፍ ከፈለጉ ከSettings በፈቃድዎ ማብራት ይችላሉ።\n"
     "🔒 የግል ማስታወሻዎችዎ በመሪ ሰሌዳ ላይ አይታዩም።\n\n"
     "ከተመዘገቡ በኋላ የዕለቱን ንባብ ከታች ካሉት አማራጮች ይክፈቱ።\n\n"
+    "መልካም ንባብ!📖\n\n"
     "Welcome to the AASTU ECSF Bible Reading App! 📖\n"
     "📌 What can this bot do?\n\n"
-    "1️⃣ Read the daily assignment and Bible chapters.\n"
-    "2️⃣ Follow the shared reading plan and mark readings as complete.\n"
-    "3️⃣ Write a private note or prayer for a reading day in the Mini App.\n\n"
+    "📖 View the daily reading and read Bible chapters.\n"
+    "🗓 Follow the shared reading plan and mark readings as complete.\n"
+    "📝 Write a private note or prayer for a reading day in the Mini App.\n"
     "🔔 Turn daily reminders on or off in Settings.\n"
-    "🏆 Opt in to appear on the leaderboard from Settings.\n\n"
+    "🏆 Choose to join the leaderboard in Settings.\n"
     "🔒 Your private journal entries are not shown on the leaderboard.\n\n"
-    "After registering, choose an option below to open the day’s reading."
+    "After registering, choose an option below to open the day’s reading.\n\n"
+    "Happy Reading!!📖"
+)
+
+HELP_COMMANDS = (
+    "Use /today to see today's assigned reading.\n"
+    "/plan to browse the full plan, or /plan 17 to open the page containing Day 17.\n"
+    "Open a plan day to read its chapters and mark it complete.\n"
+    "Use /progress to see your reading journey and streak.\n"
+    "/leaderboard to view readers who opted in.\n"
+    "/settings to manage reminders and leaderboard privacy.\n"
+    "Open the Mini App for private journaling."
 )
 
 REGISTRATION_NAME_PROMPT = (

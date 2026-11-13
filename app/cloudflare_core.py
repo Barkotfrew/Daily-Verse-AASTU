@@ -88,14 +88,26 @@ def reminder_keyboard(base_url: str, day: int) -> dict[str, Any]:
 
 
 def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str, Any]:
-    """Build a private today's-reading keyboard with explicit completion."""
-    rows = [[{
-        "text": "✓ Read" if completed else "Mark as Read",
-        "callback_data": f"complete:{day}",
-    }]]
+    """Build an interactive today's-reading keyboard with reading and reflection actions."""
+    rows = []
     reader = mini_app_reader_keyboard(base_url, day)
     if reader:
         rows.extend(reader["inline_keyboard"])
+        reflection_url = mini_app_reader_url(base_url, day=day)
+        if reflection_url:
+            params = urlencode({"day": day, "journal": 1})
+            rows.append([{
+                "text": "📝 Reflect privately",
+                "web_app": {"url": f"{base_url.rstrip('/')}/?{params}"},
+            }])
+    rows.append([{
+        "text": "✅ Reading complete" if completed else "✅ Mark as Read",
+        "callback_data": f"complete:{day}",
+    }])
+    rows.append([{
+        "text": "🗓 View Reading Plan",
+        "callback_data": f"planpage:{page_for_day(day)}",
+    }])
     return {"inline_keyboard": rows}
 
 
@@ -333,17 +345,27 @@ def registration_required(command: str, registered: bool) -> bool:
     return command not in {"start", "help"} and not registered
 
 
-def format_today_message(entry: dict[str, Any] | None, current_date: date) -> str:
+def format_today_message(
+    entry: dict[str, Any] | None,
+    current_date: date,
+    completed: bool = False,
+) -> str:
     """Render the plan entry for the shared Gregorian day, if one exists."""
     if entry is None:
         return (
             "There is no scheduled reading for "
             f"{current_date.isoformat()} in this plan."
         )
+    next_step = (
+        "✅ You’ve marked this reading complete. Well done!"
+        if completed
+        else "Take a little time with today’s chapters. When you finish, mark them complete or write a private reflection."
+    )
     return (
-        "Today's Reading\n"
+        "📖 TODAY’S READING\n"
         f"Day {entry['plan_day']} · {entry['ethiopian_date']} · "
-        f"{entry['gregorian_date']}\n{entry['reading']}"
+        f"{entry['gregorian_date']}\n{entry['reading']}\n\n"
+        f"{next_step}"
     )
 
 

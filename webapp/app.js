@@ -1017,6 +1017,7 @@
           return;
         }
         await openReadingDay(dayNumber);
+        if (params.get("journal") === "1") openJournal();
         return;
       }
       browseBible.open = true;

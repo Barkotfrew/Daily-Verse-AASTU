@@ -50,6 +50,7 @@ from app.messages import (
     WELCOME_INTRO,
     REGISTRATION_NAME_PROMPT,
     REGISTRATION_YEAR_PROMPT,
+    HELP_COMMANDS,
     REGISTRATION_DEPARTMENT_PROMPT,
     PROFILE_EDIT_INVALID,
     PROFILE_EDIT_PROMPT,
@@ -148,17 +149,29 @@ def _read_chapters_button(day: int, mini_app_url: str, in_private_chat: bool) ->
     return InlineKeyboardButton(text="Read Chapters", callback_data=f"chapters:{day}")
 
 
-def _entry_keyboard(day: int, mini_app_url: str, in_private_chat: bool) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}")],
-            [_read_chapters_button(day, mini_app_url, in_private_chat)],
-            [InlineKeyboardButton(
-                text="View Reading Plan",
-                callback_data=f"planpage:{page_for_day(day, PLAN_PAGE_SIZE)}",
-            )],
-        ]
-    )
+def _entry_keyboard(
+    day: int,
+    mini_app_url: str,
+    in_private_chat: bool,
+    completed: bool = False,
+) -> InlineKeyboardMarkup:
+    rows = [[_read_chapters_button(day, mini_app_url, in_private_chat)]]
+    if mini_app_url and in_private_chat:
+        rows.append([InlineKeyboardButton(
+            text="📝 Reflect privately",
+            web_app=WebAppInfo(url=f"{mini_app_url}/?{urlencode({'day': day, 'journal': 1})}"),
+        )])
+    rows.extend([
+        [InlineKeyboardButton(
+            text="✅ Reading complete" if completed else "✅ Mark as Read",
+            callback_data=f"complete:{day}",
+        )],
+        [InlineKeyboardButton(
+            text="🗓 View Reading Plan",
+            callback_data=f"planpage:{page_for_day(day, PLAN_PAGE_SIZE)}",
+        )],
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _journal_keyboard() -> InlineKeyboardMarkup:
@@ -237,12 +250,19 @@ def build_router(
                 f"There is no scheduled reading for {today.isoformat()} in this plan."
             )
             return
+        completed = entry.day in completed_days(database_path, message.from_user.id)
+        status = (
+            "\n\n✅ You’ve marked this reading complete. Well done!"
+            if completed
+            else "\n\nTake a little time with today’s chapters. When you finish, mark them complete or write a private reflection."
+        )
         await message.answer(
-            "Today's Reading\n" + format_reading_entry(entry),
+            "📖 TODAY’S READING\n" + format_reading_entry(entry) + status,
             reply_markup=_entry_keyboard(
                 entry.day,
                 mini_app_url,
                 message.chat.type == "private",
+                completed,
             ),
         )
 
@@ -436,6 +456,17 @@ def build_router(
             return
         inserted = mark_read(database_path, callback.from_user.id, day)
         await _answer_callback(callback, "Marked as read." if inserted else "Already marked as read.")
+        if (
+            callback.message
+            and callback.message.text
+            and callback.message.text.startswith("📖 TODAY’S READING")
+        ):
+            await callback.message.edit_text(
+                "📖 TODAY’S READING\n"
+                + format_reading_entry(plan.get_day(day))
+                + "\n\n✅ You’ve marked this reading complete. Well done!",
+                reply_markup=_entry_keyboard(day, mini_app_url, True, completed=True),
+            )
 
     @router.callback_query(F.data.startswith("chapters:"))
     async def read_chapters(callback: CallbackQuery) -> None:
@@ -884,14 +915,6 @@ def build_router(
     @router.message(Command("help"))
     @router.message(F.text == "Help")
     async def help_message(message: Message) -> None:
-        await message.answer(
-            WELCOME_INTRO + "\n\n"
-            + "Use /today to see the shared reading, /plan to browse the full plan "
-            "or /plan 17 to open the page containing Day 17, "
-            "and /progress to see your private completed-plan history. "
-            "Open the Mini App to write private reflections or prayers. "
-            "Open Settings to manage reminders or delete your account. "
-            "You can mark earlier readings complete from the plan."
-        )
+        await message.answer(WELCOME_INTRO + "\n\n" + HELP_COMMANDS)
 
     return router
