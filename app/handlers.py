@@ -23,7 +23,7 @@ from aiogram.types import Message
 
 from app.database import (
     completed_days,
-    completed_reading_history,
+    completed_reading_records,
     delete_user,
     display_name,
     journal_entry,
@@ -71,6 +71,14 @@ from app.readings import (
     format_reading_entry,
     page_for_day,
     plan_page_count,
+)
+from app.cloudflare_core import (
+    JOURNEY_PAGE_SIZE,
+    books_visited_count,
+    completed_this_eat_week,
+    journey_progress_message,
+    journey_timeline_keyboard,
+    journey_timeline_page,
 )
 
 
@@ -418,6 +426,104 @@ def build_router(
                 reply_markup=_overview_keyboard(page, total_pages, plan),
             )
 
+    def journey_summary(user_id: int):
+        days = completed_days(database_path, user_id)
+        records = completed_reading_records(database_path, user_id)
+        today = eat_date()
+        current_entry = entry_for_date(plan, today)
+        if current_entry:
+            current_plan_day = current_entry.day
+        elif today < plan.entries[0].gregorian_date:
+            current_plan_day = 0
+        elif today <= plan.entries[-1].gregorian_date + timedelta(days=1):
+            current_plan_day = plan.final_day
+        else:
+            current_plan_day = plan.final_day + 2
+        current_streak, best_streak = streak_counts(days, current_plan_day)
+        text = journey_progress_message(
+            len(days), plan.total_days, completed_this_eat_week(records),
+            books_visited_count(plan.entries, days), current_entry,
+            bool(current_entry and current_entry.day in days),
+            streak_progress_text(current_streak, best_streak),
+        )
+        rows = [[InlineKeyboardButton(text="Reading Timeline", callback_data="journey:timeline:1")]]
+        if current_entry and mini_app_url:
+            rows.append([InlineKeyboardButton(
+                text="Open today’s reading",
+                web_app=WebAppInfo(url=f"{mini_app_url}/?{urlencode({'day': current_entry.day})}"),
+            )])
+        return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+    @router.callback_query(F.data.startswith("journey:"))
+    async def reading_journey(callback: CallbackQuery) -> None:
+        if callback.from_user is None:
+            await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
+            return
+        data = callback.data or ""
+        await _answer_callback(callback)
+        if not callback.message:
+            return
+        if data == "journey:home":
+            text, markup = journey_summary(callback.from_user.id)
+        elif data.startswith("journey:timeline:"):
+            try:
+                page = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                await callback.message.edit_text("That timeline page is unavailable.")
+                return
+            days = set(completed_days(database_path, callback.from_user.id))
+            current_entry = entry_for_date(plan, eat_date())
+            selected, total_pages, text = journey_timeline_page(
+                plan.entries, days, current_entry.day if current_entry else None, page,
+            )
+            if selected is None:
+                await callback.message.edit_text(text)
+                return
+            markup = journey_timeline_keyboard(selected, page, total_pages)
+        elif data.startswith("journey:entry:"):
+            try:
+                day = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                await callback.message.edit_text("That reading entry is unavailable.")
+                return
+            entry = plan.get_day(day)
+            if entry is None:
+                await callback.message.edit_text("That reading entry is unavailable.")
+                return
+            completed = day in completed_days(database_path, callback.from_user.id)
+            today = eat_date()
+            current = entry_for_date(plan, today)
+            upcoming = entry.gregorian_date > today
+            status = "✓ Completed by you" if completed else "◉ Current shared reading · not yet completed by you" if current and day == current.day else "· Upcoming reading" if upcoming else "○ Not completed yet"
+            text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
+            rows = []
+            if not upcoming:
+                rows.append([_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")])
+                if not completed:
+                    rows.append([InlineKeyboardButton(text="Mark as Read", callback_data=f"journey:mark:{day}")])
+            rows.append([InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")])
+            rows.append([InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")])
+            markup = InlineKeyboardMarkup(inline_keyboard=rows)
+        elif data.startswith("journey:mark:"):
+            try:
+                day = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                await callback.message.edit_text("That reading entry is unavailable.")
+                return
+            entry = plan.get_day(day)
+            if entry is None or entry.gregorian_date > eat_date():
+                await callback.message.edit_text("Upcoming readings can’t be marked complete yet.")
+                return
+            mark_read(database_path, callback.from_user.id, day)
+            status = "✓ Completed by you"
+            text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
+            rows = [[_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")], [InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")], [InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")]]
+            markup = InlineKeyboardMarkup(inline_keyboard=rows)
+        else:
+            await callback.message.edit_text("That journey action is unavailable.")
+            return
+        await callback.message.edit_text(text, reply_markup=markup)
+
     @router.callback_query(F.data.startswith("plan:"))
     async def browse_plan(callback: CallbackQuery) -> None:
         try:
@@ -524,36 +630,8 @@ def build_router(
             return
         if message.from_user is None:
             return
-        days = completed_days(database_path, message.from_user.id)
-        percentage = (len(days) / plan.total_days * 100) if plan.total_days else 0
-        recent = completed_reading_history(database_path, message.from_user.id, limit=5)
-        today = eat_date()
-        current_entry = entry_for_date(plan, today)
-        if current_entry:
-            current_plan_day = current_entry.day
-        elif today < plan.entries[0].gregorian_date:
-            current_plan_day = 0
-        elif today <= plan.entries[-1].gregorian_date + timedelta(days=1):
-            current_plan_day = plan.final_day
-        else:
-            current_plan_day = plan.final_day + 2
-        current_streak, best_streak = streak_counts(days, current_plan_day)
-        history_lines = []
-        for day, completed_at in recent:
-            entry = plan.get_day(day)
-            if entry is not None:
-                history_lines.append(
-                    f"Day {day} · {completed_at[:10]} — {entry.reading}"
-                )
-        history_text = "\n".join(history_lines) or "No completed days yet. Your journey starts with the next reading!"
-        await message.answer(
-            f"🌱 Your Reading Journey\n{streak_progress_text(current_streak, best_streak)}\n\n"
-            f"📖 {len(days)} of {plan.total_days} assigned readings completed ({percentage:.1f}%).\n"
-            "Every reading is a step forward—keep going at your own pace!\n\n"
-            "Recently completed\n"
-            f"{history_text}"
-            "\n\nThis tracks the shared reading plan, not whole-Bible coverage."
-        )
+        text, markup = journey_summary(message.from_user.id)
+        await message.answer(text, reply_markup=markup)
 
     async def send_journal(message: Message) -> None:
         if message.chat.type != "private":

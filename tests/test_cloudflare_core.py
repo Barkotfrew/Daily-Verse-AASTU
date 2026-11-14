@@ -8,6 +8,11 @@ from app.cloudflare_core import (
     normalize_signup_value,
     escape_sql_text,
     format_progress_message,
+    books_visited_count,
+    completed_this_eat_week,
+    journey_progress_message,
+    journey_timeline_keyboard,
+    journey_timeline_page,
     format_leaderboard_message,
     mini_app_chapter_asset_url,
     mini_app_reader_keyboard,
@@ -177,6 +182,56 @@ class CloudflareCoreTests(unittest.TestCase):
         )
         self.assertIn("My Progress\n◆  READING STREAK", streak)
         self.assertIn("Best · 3 days\n\n3 of 231", streak)
+
+    def test_journey_week_count_uses_eat_calendar_week(self) -> None:
+        from datetime import datetime, timezone
+
+        records = (
+            (1, "2026-11-08 21:30:00"),  # Monday 00:30 EAT
+            (2, "2026-11-08 20:30:00"),  # Sunday 23:30 EAT
+            (3, "not-a-time"),
+        )
+        now = datetime(2026, 11, 9, 1, tzinfo=timezone.utc)
+        self.assertEqual(completed_this_eat_week(records, now), 1)
+
+    def test_journey_summary_is_plan_focused_and_separates_current_status(self) -> None:
+        entry = {
+            "plan_day": 12, "ethiopian_date": "ጥቅምት 22",
+            "reading": "Genesis 1-3", "gregorian_date": "2026-11-09",
+        }
+        text = journey_progress_message(3, 231, 2, 1, entry, False, "◆ 3 day streak")
+        self.assertIn("DAILY VERSE · PERSONAL RECORD", text)
+        self.assertIn("3 of 231 shared-plan readings completed", text)
+        self.assertIn("This reading is still open for you.", text)
+        self.assertIn("Completed readings · 3", text)
+        self.assertIn("Bible books visited · 1", text)
+        self.assertIn("Progress follows the shared reading plan.", text)
+
+    def test_book_count_uses_only_completed_plan_assignments(self) -> None:
+        entries = (
+            {"plan_day": 1, "reading": "Genesis 1-3"},
+            {"plan_day": 2, "reading": "Exodus 1"},
+        )
+        self.assertEqual(books_visited_count(entries, (1,)), 1)
+        self.assertEqual(books_visited_count(entries, (1, 2)), 2)
+
+    def test_timeline_uses_canonical_order_and_six_entry_pages(self) -> None:
+        entries = tuple(
+            {"plan_day": day, "ethiopian_date": f"date {day}",
+             "reading": f"Genesis {day}", "gregorian_date": f"2026-11-{day:02d}"}
+            for day in (7, 2, 6, 1, 5, 4, 3)
+        )
+        selected, page_count, text = journey_timeline_page(entries, {2}, 4, 1)
+        self.assertEqual([row["plan_day"] for row in selected], [1, 2, 3, 4, 5, 6])
+        self.assertEqual(page_count, 2)
+        self.assertLess(text.index("Day 1"), text.index("Day 6"))
+        keyboard = journey_timeline_keyboard(selected, 1, page_count)
+        self.assertEqual(keyboard["inline_keyboard"][-2][0]["callback_data"], "journey:timeline:2")
+        self.assertEqual(keyboard["inline_keyboard"][1][0]["callback_data"], "journey:entry:2")
+        final, _, final_text = journey_timeline_page(entries, {2}, 4, 2)
+        self.assertEqual([row["plan_day"] for row in final], [7])
+        self.assertIn("Days 7–7", final_text)
+        self.assertIsNone(journey_timeline_page(entries, set(), 4, 3)[0])
 
     def test_leaderboard_message_shows_only_the_consented_fields(self) -> None:
         self.assertEqual(

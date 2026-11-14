@@ -6,13 +6,22 @@ from typing import Any
 from urllib.parse import urlencode
 
 try:
-    from app.references import BOOKS
+    from app.references import BOOKS, ReferenceParseError, parse_reading_assignment
 except ModuleNotFoundError as exc:
     if exc.name != "app":
         raise
-    from references import BOOKS
+    from references import BOOKS, ReferenceParseError, parse_reading_assignment
 
 EAT = timezone(timedelta(hours=3), name="EAT")
+JOURNEY_PAGE_SIZE = 6
+
+
+def page_for_day(day: int, page_size: int = 14) -> int:
+    """Return the one-based shared-plan page containing a valid day."""
+    if day < 1 or page_size < 1:
+        raise ValueError("day and page size must be positive")
+    return (day - 1) // page_size + 1
+
 
 LEADERBOARD_QUERY = """SELECT u.display_name, u.academic_year,
        COUNT(c.plan_day) AS completed
@@ -387,6 +396,137 @@ def format_progress_message(
         f"{history}\n\n"
         "This tracks the shared reading plan, not whole-Bible coverage."
     )
+
+
+def completed_this_eat_week(records, now: datetime | None = None) -> int:
+    """Count distinct completions in the current Monday–Sunday EAT week."""
+    instant = now or datetime.now(timezone.utc)
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    today = instant.astimezone(EAT).date()
+    week_start = today - timedelta(days=today.weekday())
+    count = 0
+    for _day, raw_timestamp in records:
+        try:
+            completed_at = datetime.fromisoformat(str(raw_timestamp))
+        except (TypeError, ValueError):
+            continue
+        if completed_at.tzinfo is None:
+            completed_at = completed_at.replace(tzinfo=timezone.utc)
+        local_date = completed_at.astimezone(EAT).date()
+        if week_start <= local_date <= today:
+            count += 1
+    return count
+
+
+def books_visited_count(entries, completed_days) -> int:
+    """Count canonical Bible books in actually completed scheduled readings."""
+    completed = set(completed_days)
+    visited = set()
+    for entry in entries:
+        day = entry.get("plan_day", entry.get("day")) if isinstance(entry, dict) else entry.day
+        if day not in completed:
+            continue
+        reading = entry.get("reading") if isinstance(entry, dict) else entry.reading
+        try:
+            visited.update(passage.book.id for passage in parse_reading_assignment(reading))
+        except ReferenceParseError:
+            continue
+    return len(visited)
+
+
+def journey_progress_message(
+    completed: int,
+    total: int,
+    week_count: int,
+    books_visited: int,
+    current_entry,
+    current_completed: bool,
+    streak: str,
+) -> str:
+    """Render a restrained, personal reading-plan summary."""
+    percentage = completed / total if total else 0
+    filled = round(percentage * 10)
+    bar = "■" * filled + "·" * (10 - filled)
+    if current_entry is None:
+        current = "No reading is scheduled for today."
+    else:
+        day = current_entry.get("plan_day", current_entry.get("day")) if isinstance(current_entry, dict) else current_entry.day
+        ethiopian_date = current_entry.get("ethiopian_date") if isinstance(current_entry, dict) else current_entry.ethiopian_date
+        reading = current_entry.get("reading") if isinstance(current_entry, dict) else current_entry.reading
+        status = "You’ve completed this reading." if current_completed else "This reading is still open for you."
+        current = f"Day {day} · {ethiopian_date}\n{reading}\n{status}"
+    return (
+        "DAILY VERSE · PERSONAL RECORD\n"
+        "My Reading Journey\n\n"
+        f"{completed} of {total} shared-plan readings completed\n"
+        f"{bar}  {percentage:.0%}\n"
+        "Progress follows the shared reading plan.\n\n"
+        "CURRENT SHARED READING\n"
+        f"{current}\n\n"
+        "YOUR RECORD\n"
+        f"Completed readings · {completed}\n"
+        f"This week · {week_count}\n"
+        f"Bible books visited · {books_visited}\n\n"
+        f"{streak}"
+    )
+
+
+def journey_timeline_page(entries, completed_days, current_day: int | None, page: int,
+                          page_size: int = JOURNEY_PAGE_SIZE):
+    """Return canonical-order entries and a restrained timeline page heading."""
+    ordered = tuple(sorted(entries, key=lambda item: (
+        item.get("plan_day", item.get("day")) if isinstance(item, dict) else item.day
+    )))
+    if not ordered:
+        return None, 0, "The shared reading plan is not available right now."
+    if page_size < 1:
+        return None, 1, "That timeline page is unavailable."
+    total_pages = max(1, (len(ordered) + page_size - 1) // page_size)
+    if page < 1 or page > total_pages:
+        return None, total_pages, "That timeline page is unavailable."
+    start = (page - 1) * page_size
+    selected = ordered[start:start + page_size]
+    labels = []
+    for item in selected:
+        day = item.get("plan_day", item.get("day")) if isinstance(item, dict) else item.day
+        ethiopian_date = item.get("ethiopian_date") if isinstance(item, dict) else item.ethiopian_date
+        reading = item.get("reading") if isinstance(item, dict) else item.reading
+        marker = (
+            "✓◉" if day in completed_days and day == current_day else
+            "✓" if day in completed_days else
+            "◉" if day == current_day else
+            "○" if current_day and day < current_day else "·"
+        )
+        labels.append(f"{marker} Day {day} · {ethiopian_date}\n   {reading}")
+    first = start + 1
+    last = start + len(selected)
+    first_date = selected[0].get("ethiopian_date") if isinstance(selected[0], dict) else selected[0].ethiopian_date
+    last_date = selected[-1].get("ethiopian_date") if isinstance(selected[-1], dict) else selected[-1].ethiopian_date
+    heading = (
+        f"READING TIMELINE · {page}/{total_pages}\n"
+        f"Days {first}–{last} of {len(ordered)} · {first_date}–{last_date}\n\n"
+    )
+    return selected, total_pages, heading + "\n\n".join(labels) + "\n\n✓ completed · ◉ current · ○ not completed · · upcoming"
+
+
+def journey_timeline_keyboard(entries, page: int, total_pages: int,
+                              page_size: int = JOURNEY_PAGE_SIZE):
+    """Build compact timeline entry and pagination callback buttons."""
+    rows = []
+    for item in entries:
+        day = item.get("plan_day", item.get("day")) if isinstance(item, dict) else item.day
+        reading = item.get("reading") if isinstance(item, dict) else item.reading
+        rows.append([{"text": f"Day {day} · {reading[:24]}", "callback_data": f"journey:entry:{day}"}])
+    navigation = []
+    if page > 1:
+        navigation.append({"text": "← Previous", "callback_data": f"journey:timeline:{page - 1}"})
+    if page < total_pages:
+        navigation.append({"text": "Next →", "callback_data": f"journey:timeline:{page + 1}"})
+    if navigation:
+        rows.append(navigation)
+    rows.append([{"text": "My Reading Journey", "callback_data": "journey:home"}])
+    return {"inline_keyboard": rows}
 
 
 def reminder_message(day: int, ethiopian_date: str, gregorian_date: str, reading: str) -> str:

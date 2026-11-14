@@ -361,6 +361,19 @@ def completed_reading_history(
     return tuple((int(day), str(completed_at)) for day, completed_at in rows)
 
 
+def completed_reading_records(
+    database_path: str | Path, telegram_user_id: int
+) -> tuple[tuple[int, str], ...]:
+    """Return this user's completion records in canonical plan order."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        rows = connection.execute(
+            """SELECT plan_day, completed_at FROM reading_completions
+               WHERE telegram_user_id = ? ORDER BY plan_day""",
+            (telegram_user_id,),
+        ).fetchall()
+    return tuple((int(day), str(completed_at)) for day, completed_at in rows)
+
+
 def save_journal_entry(
     database_path: str | Path,
     telegram_user_id: int,

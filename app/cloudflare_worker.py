@@ -26,8 +26,13 @@ except ModuleNotFoundError as exc:
 from cloudflare_core import (
     LEADERBOARD_QUERY,
     current_eat_date,
+    completed_this_eat_week,
+    books_visited_count,
     completion_button,
     format_progress_message,
+    journey_progress_message,
+    journey_timeline_keyboard,
+    journey_timeline_page,
     format_leaderboard_message,
     format_today_message,
     format_plan_page,
@@ -788,6 +793,8 @@ class Default(WorkerEntrypoint):
                 elif command == "help":
                     response_message = WELCOME_INTRO + "\n\n" + HELP_COMMANDS
                     reply_markup = MAIN_MENU
+                elif command == "progress":
+                    response_message, reply_markup = await self._journey_progress(user_id)
                 else:
                     stats = await self.env.DB.prepare(
                         "SELECT (SELECT COUNT(*) FROM reading_completions "
@@ -840,6 +847,55 @@ class Default(WorkerEntrypoint):
 
         return Response("Not found", status=404)
 
+    async def _journey_progress(self, user_id):
+        records_result = await self.env.DB.prepare(
+            "SELECT plan_day, completed_at FROM reading_completions "
+            "WHERE telegram_user_id = ? ORDER BY plan_day"
+        ).bind(user_id).all()
+        records = tuple(
+            (int(row["plan_day"]), str(row["completed_at"]))
+            for row in records_result.results
+        ) if records_result else ()
+        completed_days = tuple(day for day, _stamp in records)
+        total_result = await self.env.DB.prepare(
+            "SELECT COUNT(*) AS total FROM reading_plan"
+        ).first()
+        total = int(total_result["total"]) if total_result else 0
+        entries_result = await self.env.DB.prepare(
+            "SELECT plan_day, ethiopian_date, reading, gregorian_date FROM reading_plan ORDER BY plan_day"
+        ).all()
+        entries = tuple(entries_result.results) if entries_result else ()
+        today = current_eat_date()
+        current_entry = next(
+            (entry for entry in entries if entry["gregorian_date"] == today.isoformat()), None
+        )
+        if current_entry:
+            current_plan_day = int(current_entry["plan_day"])
+        else:
+            previous = next(
+                (entry for entry in reversed(entries) if entry["gregorian_date"] < today.isoformat()),
+                None,
+            )
+            current_plan_day = (
+                int(previous["plan_day"]) + (today - date.fromisoformat(previous["gregorian_date"])).days
+                if previous else 0
+            )
+        current_streak, best_streak = streak_counts(completed_days, current_plan_day)
+        text = journey_progress_message(
+            len(completed_days), total,
+            completed_this_eat_week(records),
+            books_visited_count(entries, completed_days),
+            current_entry,
+            bool(current_entry and int(current_entry["plan_day"]) in completed_days),
+            streak_progress_text(current_streak, best_streak),
+        )
+        rows = [[{"text": "Reading Timeline", "callback_data": "journey:timeline:1"}]]
+        if current_entry:
+            url = self._reader_url(day=int(current_entry["plan_day"]))
+            if url:
+                rows.append([{"text": "Open today’s reading", "web_app": {"url": url}}])
+        return text, {"inline_keyboard": rows}
+
     async def _handle_plan_callback(self, callback):
         callback_id = callback.get("id")
         user = callback.get("from") or {}
@@ -862,6 +918,92 @@ class Default(WorkerEntrypoint):
         # Telegram requires callback queries to be answered promptly. Do this
         # before D1 lookups so slow database responses cannot expire the query.
         await self._answer_callback(callback_id)
+
+        if data == "journey:home":
+            text, keyboard = await self._journey_progress(user["id"])
+            await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+            return True
+        journey_home_keyboard = {
+            "inline_keyboard": [[
+                {"text": "My Reading Journey", "callback_data": "journey:home"}
+            ]]
+        }
+        if data.startswith("journey:timeline:"):
+            try:
+                page = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                await self._edit_message(chat["id"], message["message_id"], "That timeline page is unavailable.", journey_home_keyboard)
+                return True
+            completed_result = await self.env.DB.prepare(
+                "SELECT plan_day FROM reading_completions WHERE telegram_user_id = ?"
+            ).bind(user["id"]).all()
+            completed = {int(row["plan_day"]) for row in completed_result.results} if completed_result else set()
+            current_date = current_eat_date()
+            current_result = await self.env.DB.prepare(
+                "SELECT plan_day FROM reading_plan WHERE gregorian_date = ?"
+            ).bind(current_date.isoformat()).first()
+            current_day = int(current_result["plan_day"]) if current_result else None
+            plan_result = await self.env.DB.prepare(
+                "SELECT plan_day, ethiopian_date, reading, gregorian_date FROM reading_plan ORDER BY plan_day"
+            ).all()
+            entries = tuple(plan_result.results) if plan_result else ()
+            selected, total_pages, text = journey_timeline_page(entries, completed, current_day, page)
+            keyboard = (
+                journey_timeline_keyboard(selected, page, total_pages)
+                if selected is not None else journey_home_keyboard
+            )
+            await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+            return True
+        if data.startswith("journey:entry:") or data.startswith("journey:mark:"):
+            action = "mark" if data.startswith("journey:mark:") else "entry"
+            try:
+                day = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                await self._edit_message(chat["id"], message["message_id"], "That reading entry is unavailable.", journey_home_keyboard)
+                return True
+            entry = await self.env.DB.prepare(
+                "SELECT plan_day, ethiopian_date, reading, gregorian_date FROM reading_plan WHERE plan_day = ?"
+            ).bind(day).first()
+            if entry is None:
+                await self._edit_message(chat["id"], message["message_id"], "That reading entry is unavailable.", journey_home_keyboard)
+                return True
+            today = current_eat_date()
+            upcoming = date.fromisoformat(entry["gregorian_date"]) > today
+            if action == "mark":
+                if upcoming:
+                    await self._edit_message(chat["id"], message["message_id"], "Upcoming readings can’t be marked complete yet.", journey_home_keyboard)
+                    return True
+                await self.env.DB.prepare(
+                    "INSERT OR IGNORE INTO reading_completions (telegram_user_id, plan_day) VALUES (?, ?)"
+                ).bind(user["id"], day).run()
+            completed = await self.env.DB.prepare(
+                "SELECT 1 AS completed FROM reading_completions WHERE telegram_user_id = ? AND plan_day = ?"
+            ).bind(user["id"], day).first()
+            current = await self.env.DB.prepare(
+                "SELECT 1 AS current FROM reading_plan WHERE plan_day = ? AND gregorian_date = ?"
+            ).bind(day, today.isoformat()).first()
+            status = (
+                "✓ Completed by you" if completed else
+                "◉ Current shared reading · not yet completed by you" if current else
+                "· Upcoming reading" if upcoming else "○ Not completed yet"
+            )
+            text = (
+                f"My Reading Journey · Day {day}\n{entry['ethiopian_date']} · "
+                f"{entry['gregorian_date']}\n{entry['reading']}\n\n{status}"
+            )
+            rows = []
+            if not upcoming:
+                reader = self._reader_keyboard(day)
+                if reader:
+                    rows.extend(reader["inline_keyboard"])
+                if not completed:
+                    rows.append([{"text": "Mark as Read", "callback_data": f"journey:mark:{day}"}])
+            rows.extend([
+                [{"text": "← Reading Timeline", "callback_data": f"journey:timeline:{(day - 1) // 6 + 1}"}],
+                [{"text": "My Reading Journey", "callback_data": "journey:home"}],
+            ])
+            await self._edit_message(chat["id"], message["message_id"], text, {"inline_keyboard": rows})
+            return True
 
         if data == "journal:new":
             await self.env.DB.prepare(
