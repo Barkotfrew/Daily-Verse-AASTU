@@ -297,7 +297,9 @@ class Default(WorkerEntrypoint):
     async def scheduled(self, controller, env, ctx):
         """Queue one bounded subscriber batch for the active 06/12/18 EAT window."""
         cron = getattr(controller, "cron", "")
-        if cron not in {"* 3,9,15 * * *", "0 19 * * *"}:
+        print(f"reminder_cron_start cron={cron}")
+        if cron != "* 3,9,15 * * *":
+            print("reminder_cron_skip reason=unrecognized_cron")
             return
         timestamp = int(controller.scheduledTime)
         reminder_date = scheduled_eat_date(timestamp)
@@ -305,20 +307,16 @@ class Default(WorkerEntrypoint):
 
         scheduled_at = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
         eat_hour = (scheduled_at.hour + 3) % 24
-        if cron == "0 19 * * *":
-            # Temporary diagnostic run reuses the existing evening ledger slot.
-            if (eat_hour, scheduled_at.minute) != (22, 0):
-                return
-            schedule_slot = "18:00"
-        else:
-            schedule_slot = f"{eat_hour:02d}:00"
+        schedule_slot = f"{eat_hour:02d}:00"
         if schedule_slot not in {"06:00", "12:00", "18:00"}:
+            print("reminder_cron_skip reason=invalid_slot")
             return
         plan = await self.env.DB.prepare(
             "SELECT plan_day, ethiopian_date, gregorian_date, reading "
             "FROM reading_plan WHERE gregorian_date = ?"
         ).bind(reminder_date).first()
         if plan is None:
+            print(f"reminder_cron_skip reason=no_plan date={reminder_date}")
             return
 
         await self.env.DB.prepare(
@@ -329,6 +327,7 @@ class Default(WorkerEntrypoint):
             "WHERE reminder_date = ? AND schedule_slot = ?"
         ).bind(reminder_date, schedule_slot).first()
         if run is None or bool(run["finished"]):
+            print(f"reminder_cron_skip reason=run_finished date={reminder_date} slot={schedule_slot}")
             return
         recipients = await self.env.DB.prepare(
             "SELECT telegram_user_id, private_chat_id FROM users "
@@ -341,6 +340,7 @@ class Default(WorkerEntrypoint):
                 "UPDATE reminder_runs SET finished = 1 "
                 "WHERE reminder_date = ? AND schedule_slot = ?"
             ).bind(reminder_date, schedule_slot).run()
+            print(f"reminder_cron_finished date={reminder_date} slot={schedule_slot}")
             return
 
         insert_statements = [
@@ -369,14 +369,21 @@ class Default(WorkerEntrypoint):
             }}
             for user in users
         ]
-        await self.env.REMINDER_QUEUE.sendBatch(batch)
+        try:
+            await self.env.REMINDER_QUEUE.sendBatch(batch)
+        except Exception as exc:
+            print(f"reminder_queue_publish_failed error={type(exc).__name__}")
+            raise
         await self.env.DB.prepare(
             "UPDATE reminder_runs SET last_user_id = ? "
             "WHERE reminder_date = ? AND schedule_slot = ?"
         ).bind(users[-1]["telegram_user_id"], reminder_date, schedule_slot).run()
+        print(f"reminder_queue_published count={len(batch)} date={reminder_date} slot={schedule_slot}")
 
     async def queue(self, batch):
         """Deliver queued reminders independently and retry transient failures."""
+        print(f"reminder_queue_batch_start count={len(batch.messages)}")
+        sent = skipped = failed = 0
         for message in batch.messages:
             body = message.body
             try:
@@ -417,6 +424,7 @@ class Default(WorkerEntrypoint):
                     changes = meta.get("changes", changes)
                 if not changes:
                     message.ack()
+                    skipped += 1
                     continue
 
                 try:
@@ -427,7 +435,9 @@ class Default(WorkerEntrypoint):
                             "reply_markup": body.get("reply_markup"),
                         }
                     )
-                except Exception:
+                except Exception as exc:
+                    print(f"reminder_telegram_failed error={type(exc).__name__}")
+                    failed += 1
                     await self.env.DB.prepare(
                         "UPDATE reminder_deliveries SET status = 'failed', "
                         "last_error = 'Telegram delivery failed' "
@@ -441,12 +451,16 @@ class Default(WorkerEntrypoint):
                         message.ack()
                     continue
                 message.ack()
-            except Exception:
+                sent += 1
+            except Exception as exc:
+                print(f"reminder_consumer_failed error={type(exc).__name__}")
+                failed += 1
                 # One malformed or failed item must not stop other recipients.
                 try:
                     message.retry(delaySeconds=120)
                 except Exception:
                     message.ack()
+        print(f"reminder_queue_batch_done sent={sent} skipped={skipped} failed={failed}")
 
     async def fetch(self, request):
         path = urlparse(request.url).path

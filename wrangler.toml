@@ -26,6 +26,4 @@ max_batch_timeout = 5
 max_retries = 5
 
 [triggers]
-# TEMPORARY diagnostic trigger: 22:00 EAT (19:00 UTC). Restore the regular
-# reminder schedule after verifying this run: ["* 3,9,15 * * *"].
-crons = ["0 19 * * *"]
+crons = ["* 3,9,15 * * *"]
