@@ -324,9 +324,7 @@ class Default(WorkerEntrypoint):
             return
         recipients = await self.env.DB.prepare(
             "SELECT telegram_user_id, private_chat_id FROM users "
-            "WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL "
-            "AND display_name IS NOT NULL AND academic_year IS NOT NULL "
-            "AND department IS NOT NULL AND telegram_user_id > ? "
+            "WHERE private_chat_id IS NOT NULL AND telegram_user_id > ? "
             "ORDER BY telegram_user_id LIMIT 100"
         ).bind(run["last_user_id"]).all()
         users = tuple(recipients.results) if recipients else ()
@@ -401,7 +399,7 @@ class Default(WorkerEntrypoint):
                     "AND schedule_slot = ? "
                     "AND status IN ('queued', 'failed') "
                     "AND EXISTS (SELECT 1 FROM users WHERE telegram_user_id = ? "
-                    "AND reminders_enabled = 1 AND private_chat_id = ?)"
+                    "AND private_chat_id = ?)"
                 ).bind(reminder_date, user_id, schedule_slot, user_id, chat_id).run()
                 meta = getattr(claim, "meta", None)
                 if meta is None and isinstance(claim, dict):
@@ -1105,11 +1103,7 @@ class Default(WorkerEntrypoint):
             )
             return True
 
-        if data == "reminders:toggle":
-            await self.env.DB.prepare(
-                "UPDATE users SET reminders_enabled = 1 - reminders_enabled "
-                "WHERE telegram_user_id = ?"
-            ).bind(user["id"]).run()
+        if data in {"reminders:toggle", "reminders:info"}:
             settings = await self.env.DB.prepare(
                 "SELECT display_name, academic_year, department, reminders_enabled, "
                 "leaderboard_opt_in FROM users "
@@ -1119,7 +1113,7 @@ class Default(WorkerEntrypoint):
             leaderboard_enabled = bool(settings["leaderboard_opt_in"]) if settings else False
             await self._edit_message(
                 chat["id"], message["message_id"],
-                format_worker_settings(settings),
+                format_worker_settings(settings) + "\n\nReminders are automatic for everyone who has started the bot.",
                 settings_keyboard(enabled, leaderboard_enabled),
             )
             return True

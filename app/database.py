@@ -484,17 +484,14 @@ def leaderboard_entries(
 def prepare_reminder_deliveries(
     database_path: str | Path, reminder_date: str, plan_day: int, schedule_slot: str = "06:00"
 ) -> None:
-    """Create a unique pending delivery for each opted-in private-chat user."""
+    """Create a unique pending delivery for every user who has started the bot."""
     with closing(sqlite3.connect(database_path)) as connection:
         with connection:
             connection.execute(
                 """INSERT OR IGNORE INTO reminder_deliveries
                    (reminder_date, schedule_slot, telegram_user_id, plan_day)
                    SELECT ?, ?, telegram_user_id, ? FROM users
-                   WHERE reminders_enabled = 1 AND private_chat_id IS NOT NULL
-                     AND display_name IS NOT NULL AND trim(display_name) != ''
-                     AND academic_year IS NOT NULL AND trim(academic_year) != ''
-                     AND department IS NOT NULL AND trim(department) != ''""",
+                   WHERE private_chat_id IS NOT NULL""",
                 (reminder_date, schedule_slot, plan_day),
             )
 
@@ -511,10 +508,7 @@ def due_reminder_deliveries(
                WHERE d.reminder_date = ? AND d.schedule_slot = ?
                  AND d.status != 'sent' AND d.attempts < ?
                  AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= ?)
-                 AND u.reminders_enabled = 1 AND u.private_chat_id IS NOT NULL
-                 AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
-                 AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
-                 AND u.department IS NOT NULL AND trim(u.department) != ''
+                 AND u.private_chat_id IS NOT NULL
                ORDER BY d.telegram_user_id""",
             (reminder_date, schedule_slot, max_attempts, now),
         ).fetchall()

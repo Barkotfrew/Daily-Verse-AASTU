@@ -15,7 +15,6 @@ from app.database import (
     mark_reminder_sent,
     prepare_reminder_deliveries,
     record_reminder_attempt,
-    set_reminders_enabled,
 )
 from app.messages import DAILY_REMINDER
 from app.reading_plan import ReadingEntry, ReadingPlan
@@ -110,9 +109,8 @@ async def deliver_due_reminders(
                     request_timeout=15,
                 )
             except TelegramForbiddenError as error:
-                set_reminders_enabled(database_path, user_id, False)
                 mark_reminder_failed(database_path, date_key, user_id, str(error), None, slot_key)
-                logger.info("Disabled reminders for Telegram user %s after forbidden delivery", user_id)
+                logger.info("Telegram blocked reminder delivery for user %s", user_id)
             except (TelegramAPIError, asyncio.TimeoutError, OSError) as error:
                 attempt_number = previous_attempts + 1
                 retry_at = None

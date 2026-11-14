@@ -29,14 +29,12 @@ from app.database import (
     journal_entry,
     journal_entries,
     mark_read,
-    reminders_enabled,
     register_user,
     profile_details,
     leaderboard_entries,
     leaderboard_opt_in,
     signup_stage,
     set_leaderboard_opt_in,
-    set_reminders_enabled,
     save_journal_entry,
     user_is_registered,
     update_profile_field,
@@ -93,13 +91,11 @@ class JournalEntryFlow(StatesGroup):
     prayer = State()
 
 
-def _settings_keyboard(enabled: bool, leaderboard_enabled: bool) -> InlineKeyboardMarkup:
-    label = "Turn reminders off" if enabled else "Turn reminders on"
+def _settings_keyboard(leaderboard_enabled: bool) -> InlineKeyboardMarkup:
     leaderboard_label = (
         "Leave leaderboard" if leaderboard_enabled else "Join leaderboard"
     )
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=label, callback_data="toggle_reminders")],
         [InlineKeyboardButton(text=leaderboard_label, callback_data="toggle_leaderboard")],
         [InlineKeyboardButton(text="Edit my details", callback_data="profile_edit")],
         [InlineKeyboardButton(text="Delete my account", callback_data="delete_account")],
@@ -118,13 +114,12 @@ def _profile_edit_keyboard() -> InlineKeyboardMarkup:
 def _settings_text(
     database_path: Path,
     user_id: int,
-    enabled: bool,
     leaderboard_enabled: bool,
     delivery_note: str,
 ) -> str:
     profile = profile_details(database_path, user_id) or {}
     return (
-        f"Daily reminders are {'on' if enabled else 'off'}. {delivery_note}\n\n"
+        f"Daily reminders are sent automatically to everyone who has started the bot. {delivery_note}\n\n"
         "Your details\n"
         f"Name: {profile.get('name') or 'Not set'}\n"
         f"Year: {profile.get('year') or 'Not set'}\n"
@@ -835,16 +830,15 @@ def build_router(
             message.from_user.id,
             message.chat.id if message.chat.type == "private" else None,
         )
-        enabled = reminders_enabled(database_path, message.from_user.id)
         opted_in = leaderboard_opt_in(database_path, message.from_user.id)
         delivery_note = (
-            f"Reminders are sent at {reminder_schedule_text} EAT, including on days you have marked as read."
+            f"Schedule: {reminder_schedule_text} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )
         await message.answer(
-            _settings_text(database_path, message.from_user.id, enabled, opted_in, delivery_note),
-            reply_markup=_settings_keyboard(enabled, opted_in),
+            _settings_text(database_path, message.from_user.id, opted_in, delivery_note),
+            reply_markup=_settings_keyboard(opted_in),
         )
 
     @router.callback_query(F.data == "toggle_reminders")
@@ -856,19 +850,21 @@ def build_router(
             await _answer_callback(callback, "Use this option in a private chat.", show_alert=True)
             return
         register_user(database_path, callback.from_user.id, callback.message.chat.id)
-        enabled = not reminders_enabled(database_path, callback.from_user.id)
-        set_reminders_enabled(database_path, callback.from_user.id, enabled)
         opted_in = leaderboard_opt_in(database_path, callback.from_user.id)
-        await _answer_callback(callback, "Reminders turned on." if enabled else "Reminders turned off.")
+        await _answer_callback(
+            callback,
+            "Reminders are automatic for everyone who has started the bot.",
+            show_alert=True,
+        )
         if callback.message:
             delivery_note = (
-                f"Reminders are sent at {reminder_schedule_text} EAT, including on days you have marked as read."
+                f"Schedule: {reminder_schedule_text} EAT, including on days you have marked as read."
                 if reminder_scheduler_enabled
                 else "Delivery is paused until the hosting scheduler is verified and enabled."
             )
             await callback.message.edit_text(
-                _settings_text(database_path, callback.from_user.id, enabled, opted_in, delivery_note),
-                reply_markup=_settings_keyboard(enabled, opted_in),
+                _settings_text(database_path, callback.from_user.id, opted_in, delivery_note),
+                reply_markup=_settings_keyboard(opted_in),
             )
 
     @router.callback_query(F.data == "toggle_leaderboard")
@@ -886,15 +882,14 @@ def build_router(
             callback,
             "You joined the leaderboard." if opted_in else "You left the leaderboard.",
         )
-        enabled = reminders_enabled(database_path, callback.from_user.id)
         delivery_note = (
-            f"Reminders are sent at {reminder_schedule_text} EAT, including on days you have marked as read."
+            f"Schedule: {reminder_schedule_text} EAT, including on days you have marked as read."
             if reminder_scheduler_enabled
             else "Delivery is paused until the hosting scheduler is verified and enabled."
         )
         await callback.message.edit_text(
-            _settings_text(database_path, callback.from_user.id, enabled, opted_in, delivery_note),
-            reply_markup=_settings_keyboard(enabled, opted_in),
+            _settings_text(database_path, callback.from_user.id, opted_in, delivery_note),
+            reply_markup=_settings_keyboard(opted_in),
         )
 
     @router.callback_query(F.data.startswith("profile_edit"))

@@ -249,11 +249,11 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertIn("You are not listed", leaderboard_settings_message(False))
         self.assertIn("study year", leaderboard_settings_message(True))
         self.assertEqual(
-            settings_keyboard(True, False)["inline_keyboard"][1][0],
+            settings_keyboard(True, False)["inline_keyboard"][0][0],
             {"text": "Join leaderboard", "callback_data": "leaderboard:toggle"},
         )
         self.assertEqual(
-            settings_keyboard(True, True)["inline_keyboard"][1][0]["text"],
+            settings_keyboard(True, True)["inline_keyboard"][0][0]["text"],
             "Leave leaderboard",
         )
 
@@ -282,17 +282,17 @@ class CloudflareCoreTests(unittest.TestCase):
     def test_personal_action_keyboards_and_reminder_setting_copy(self) -> None:
         keyboard = today_keyboard("https://daily-verse-aastu.pages.dev", 24)
         self.assertEqual(
-            keyboard["inline_keyboard"][0][0]["callback_data"], "complete:24"
-        )
-        self.assertEqual(
-            keyboard["inline_keyboard"][1][0]["web_app"]["url"],
+            keyboard["inline_keyboard"][0][0]["web_app"]["url"],
             "https://daily-verse-aastu.pages.dev/?day=24",
         )
         self.assertEqual(
-            reminders_keyboard(True)["inline_keyboard"][0][0]["text"],
-            "Turn reminders off",
+            keyboard["inline_keyboard"][2][0]["callback_data"], "complete:24"
         )
-        self.assertIn("continue after", reminders_settings_message(True))
+        self.assertEqual(
+            reminders_keyboard(False)["inline_keyboard"][0][0]["callback_data"],
+            "reminders:info",
+        )
+        self.assertIn("everyone who has started", reminders_settings_message(False))
 
     def test_settings_toggle_and_completion_callbacks_are_user_scoped_ids(self) -> None:
         from app.cloudflare_core import completion_button
@@ -302,9 +302,13 @@ class CloudflareCoreTests(unittest.TestCase):
             completion_button(231, callback_prefix="plancomplete")[0]["callback_data"],
             "plancomplete:231",
         )
-        self.assertEqual(
-            reminders_keyboard(False)["inline_keyboard"][0][0]["callback_data"],
+        self.assertNotIn(
             "reminders:toggle",
+            [
+                button.get("callback_data")
+                for row in settings_keyboard(False, False)["inline_keyboard"]
+                for button in row
+            ],
         )
 
     def test_sql_text_escapes_single_quotes(self) -> None:

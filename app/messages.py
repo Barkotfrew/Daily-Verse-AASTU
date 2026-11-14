@@ -19,7 +19,7 @@ WELCOME_INTRO = (
     "📖 የዕለቱን ንባብ ማየት እና የመጽሐፍ ቅዱስ ምዕራፎችን ማንበብ ይችላሉ።\n"
     "🗓 የጋራውን የንባብ እቅድ መከታተል እና ንባብዎን እንደጨረሱ ምልክት ማድረግ ይችላሉ።\n"
     "📝 ከንባብ ቀን ጋር የተያያዘ የግል ማስታወሻ ወይም ጸሎት በMini App ውስጥ መጻፍ ይችላሉ።\n"
-    "🔔 ከSettings የዕለታዊ ማስታወሻዎችን ማብራት ወይም ማጥፋት ይችላሉ።\n"
+    "🔔 ቦቱን /start ላደረጉ ሁሉ በየቀኑ 6፡00፣ 12፡00 እና 18፡00 የንባብ ማስታወሻ ይላካል።\n"
     "🏆 በመሪ ሰሌዳው መሳተፍ ከፈለጉ ከSettings በፈቃድዎ ማብራት ይችላሉ።\n"
     "🔒 የግል ማስታወሻዎችዎ በመሪ ሰሌዳ ላይ አይታዩም።\n\n"
     "ከተመዘገቡ በኋላ የዕለቱን ንባብ ከታች ካሉት አማራጮች ይክፈቱ።\n\n"
@@ -29,7 +29,7 @@ WELCOME_INTRO = (
     "📖 View the daily reading and read Bible chapters.\n"
     "🗓 Follow the shared reading plan and mark readings as complete.\n"
     "📝 Write a private note or prayer for a reading day in the Mini App.\n"
-    "🔔 Turn daily reminders on or off in Settings.\n"
+    "🔔 Everyone who has started the bot receives reminders at 06:00, 12:00, and 18:00 EAT.\n"
     "🏆 Choose to join the leaderboard in Settings.\n"
     "🔒 Your private journal entries are not shown on the leaderboard.\n\n"
     "After registering, choose an option below to open the day’s reading.\n\n"
@@ -42,7 +42,7 @@ HELP_COMMANDS = (
     "Open a plan day to read its chapters and mark it complete.\n"
     "Use /progress to see your reading journey and streak.\n"
     "/leaderboard to view readers who opted in.\n"
-    "/settings to manage reminders and leaderboard privacy.\n"
+    "/settings to manage your profile and leaderboard privacy.\n"
     "Open the Mini App for private journaling."
 )
 

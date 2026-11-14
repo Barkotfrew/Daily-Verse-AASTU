@@ -130,18 +130,16 @@ def completion_button(
 
 
 def reminders_keyboard(enabled: bool) -> dict[str, Any]:
-    label = "Turn reminders off" if enabled else "Turn reminders on"
     return {"inline_keyboard": [[{
-        "text": label,
-        "callback_data": "reminders:toggle",
+        "text": "Reminders · 06:00, 12:00, 18:00 EAT",
+        "callback_data": "reminders:info",
     }]]}
 
 
 def reminders_settings_message(enabled: bool) -> str:
-    state = "on" if enabled else "off"
     return (
-        f"Settings\nDaily reminders are {state}.\n"
-        "Reminders continue after you mark a reading complete."
+        "Daily reminders are sent automatically to everyone who has started the bot.\n"
+        "Schedule: 06:00, 12:00, and 18:00 EAT."
     )
 
 
@@ -155,11 +153,9 @@ def leaderboard_settings_message(enabled: bool) -> str:
 
 
 def settings_keyboard(reminders_enabled: bool, leaderboard_enabled: bool) -> dict[str, Any]:
-    """Settings actions, with leaderboard visibility controlled by explicit opt-in."""
-    reminder_label = "Turn reminders off" if reminders_enabled else "Turn reminders on"
+    """Settings actions; reminders are automatic and leaderboard stays opt-in."""
     leaderboard_label = "Leave leaderboard" if leaderboard_enabled else "Join leaderboard"
     return {"inline_keyboard": [
-        [{"text": reminder_label, "callback_data": "reminders:toggle"}],
         [{"text": leaderboard_label, "callback_data": "leaderboard:toggle"}],
         [{"text": "Edit my details", "callback_data": "profile:edit"}],
         [{"text": "Delete my account", "callback_data": "account:delete"}],

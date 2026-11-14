@@ -148,6 +148,7 @@ class DatabaseInitializationTests(unittest.TestCase):
             save_display_name(database_path, 13, "Opted out")
             save_signup_field(database_path, 13, "year", "2")
             save_signup_field(database_path, 13, "department", "ECS")
+            set_reminders_enabled(database_path, 10, False)
             set_reminders_enabled(database_path, 13, False)
 
             prepare_reminder_deliveries(database_path, "2026-10-11", 1)
@@ -156,13 +157,13 @@ class DatabaseInitializationTests(unittest.TestCase):
                 database_path, "2026-10-11", "2026-10-11T04:00:00+00:00", 5
             )
 
-            self.assertEqual(due, ((10, 1010, 0),))
+            self.assertEqual(due, ((10, 1010, 0), (12, 1012, 0), (13, 1013, 0)))
             mark_reminder_sent(database_path, "2026-10-11", 10)
             self.assertEqual(
                 due_reminder_deliveries(
                     database_path, "2026-10-11", "2026-10-11T04:00:30+00:00", 5
                 ),
-                (),
+                ((12, 1012, 0), (13, 1013, 0)),
             )
 
     def test_leaderboard_is_explicit_opt_in_sorted_and_limited(self) -> None:
