@@ -26,6 +26,6 @@ max_batch_timeout = 5
 max_retries = 5
 
 [triggers]
-# Cloudflare Cron uses UTC. Each minute in these hours is checked by the
-# Worker; it sends only at 06:00, 12:00, and 18:00 East Africa Time.
-crons = ["* 3,9,15 * * *"]
+# TEMPORARY diagnostic trigger: 22:00 EAT (19:00 UTC). Restore the regular
+# reminder schedule after verifying this run: ["* 3,9,15 * * *"].
+crons = ["0 19 * * *"]

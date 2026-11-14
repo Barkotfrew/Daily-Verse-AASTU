@@ -296,14 +296,22 @@ class Default(WorkerEntrypoint):
 
     async def scheduled(self, controller, env, ctx):
         """Queue one bounded subscriber batch for the active 06/12/18 EAT window."""
-        if getattr(controller, "cron", "") != "* 3,9,15 * * *":
+        cron = getattr(controller, "cron", "")
+        if cron not in {"* 3,9,15 * * *", "0 19 * * *"}:
             return
         timestamp = int(controller.scheduledTime)
         reminder_date = scheduled_eat_date(timestamp)
         from datetime import datetime, timezone
 
-        eat_hour = (datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).hour + 3) % 24
-        schedule_slot = f"{eat_hour:02d}:00"
+        scheduled_at = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+        eat_hour = (scheduled_at.hour + 3) % 24
+        if cron == "0 19 * * *":
+            # Temporary diagnostic run reuses the existing evening ledger slot.
+            if (eat_hour, scheduled_at.minute) != (22, 0):
+                return
+            schedule_slot = "18:00"
+        else:
+            schedule_slot = f"{eat_hour:02d}:00"
         if schedule_slot not in {"06:00", "12:00", "18:00"}:
             return
         plan = await self.env.DB.prepare(
