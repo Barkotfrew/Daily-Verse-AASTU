@@ -115,7 +115,9 @@ def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str
     }])
     rows.append([{
         "text": "🗓 View Reading Plan",
-        "callback_data": f"planpage:{page_for_day(day)}",
+        # Keep this calculation local to the keyboard builder. In the deployed
+        # Worker bundle, this helper has previously been missing at runtime.
+        "callback_data": f"planpage:{(day - 1) // 14 + 1}",
     }])
     return {"inline_keyboard": rows}
 
