@@ -13,7 +13,7 @@ DAILY_REMINDER = (
 REGISTRATION_REQUIRED = "Please send /start first so we can get you set up. 📖"
 
 WELCOME_INTRO = (
-    "Welcome to the AASTU ECSF Bible Reading App! 📖\n"
+    "Welcome to the AASTU ECSF Bible Reading App! 📖\n\n"
     "📌 What can this bot do?\n\n"
     "📖 View the daily reading and read Bible chapters.\n"
     "🗓 Follow the shared reading plan and mark readings as complete.\n"
