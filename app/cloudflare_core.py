@@ -106,7 +106,7 @@ def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str
         if reflection_url:
             params = urlencode({"day": day, "journal": 1})
             rows.append([{
-                "text": "📝 Reflect privately",
+                "text": "📝 Reflect",
                 "web_app": {"url": f"{base_url.rstrip('/')}/?{params}"},
             }])
     rows.append([{
@@ -534,6 +534,20 @@ def reminder_message(day: int, ethiopian_date: str, gregorian_date: str, reading
         f"የዛሬ ንባብ · ቀን {day}\n"
         f"{ethiopian_date} · {gregorian_date}\n"
         f"{reading}"
+    )
+
+
+def morning_reminder_message(day: int, ethiopian_date: str, gregorian_date: str, reading: str) -> str:
+    """Format the warm 06:00 EAT opening reminder."""
+    return (
+        "ሰላም ተወዳጆች! 👋\n"
+        "ንባባችን እንደቀጠለ ነው!!\n\n"
+        "Let's start our day with God's Word! Here's today's portion of our Challenge. 📖\n\n"
+        "📖 *TODAY'S READING*\n\n"
+        f"Day {day} · {ethiopian_date} · {gregorian_date}\n\n"
+        f"*{reading}*\n\n"
+        "Take a little time to read and reflect on today's chapters.\n\n"
+        "Have a blessed day!"
     )
 
 

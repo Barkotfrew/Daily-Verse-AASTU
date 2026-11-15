@@ -177,7 +177,7 @@ def signup_stage(database_path: str | Path, telegram_user_id: int) -> str | None
         ).fetchone()
     if row is None:
         return None
-    for field, value in zip(("name", "year", "department"), row):
+    for field, value in (("name", row[0]), ("department", row[2]), ("year", row[1])):
         if not value or not value.strip():
             return field
     return "complete"

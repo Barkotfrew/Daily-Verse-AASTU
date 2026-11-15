@@ -161,7 +161,7 @@ def _entry_keyboard(
     rows = [[_read_chapters_button(day, mini_app_url, in_private_chat)]]
     if mini_app_url and in_private_chat:
         rows.append([InlineKeyboardButton(
-            text="📝 Reflect privately",
+            text="📝 Reflect",
             web_app=WebAppInfo(url=f"{mini_app_url}/?{urlencode({'day': day, 'journal': 1})}"),
         )])
     rows.extend([

@@ -40,6 +40,7 @@ from cloudflare_core import (
     mini_app_reader_keyboard,
     mini_app_reader_url,
     reminder_message,
+    morning_reminder_message,
     reminder_keyboard,
     reminders_settings_message,
     leaderboard_settings_message,
@@ -90,10 +91,10 @@ DELETE_ACCOUNT_PROMPT = (
 def next_signup_field(user):
     if not user["display_name"]:
         return "display_name"
-    if not user["academic_year"]:
-        return "academic_year"
     if not user["department"]:
         return "department"
+    if not user["academic_year"]:
+        return "academic_year"
     return None
 
 
@@ -298,7 +299,7 @@ class Default(WorkerEntrypoint):
         """Queue one bounded subscriber batch for the active 06/12/18 EAT window."""
         cron = getattr(controller, "cron", "")
         print(f"reminder_cron_start cron={cron}")
-        if cron != "* 3,9,15 * * *":
+        if cron != "0 3,9,15 * * *":
             print("reminder_cron_skip reason=unrecognized_cron")
             return
         timestamp = int(controller.scheduledTime)
@@ -352,7 +353,10 @@ class Default(WorkerEntrypoint):
             for user in users
         ]
         await self.env.DB.batch(insert_statements)
-        message = reminder_message(
+        reminder_text = (
+            morning_reminder_message if schedule_slot == "06:00" else reminder_message
+        )
+        message = reminder_text(
             int(plan["plan_day"]), plan["ethiopian_date"],
             plan["gregorian_date"], plan["reading"],
         )
@@ -363,6 +367,7 @@ class Default(WorkerEntrypoint):
                 "telegram_user_id": int(user["telegram_user_id"]),
                 "chat_id": int(user["private_chat_id"]),
                 "text": message,
+                "parse_mode": "Markdown" if schedule_slot == "06:00" else None,
                 "reply_markup": reminder_keyboard(
                     getattr(self.env, "MINI_APP_URL", ""), int(plan["plan_day"])
                 ),
@@ -380,7 +385,7 @@ class Default(WorkerEntrypoint):
         ).bind(users[-1]["telegram_user_id"], reminder_date, schedule_slot).run()
         print(f"reminder_queue_published count={len(batch)} date={reminder_date} slot={schedule_slot}")
 
-    async def queue(self, batch):
+    async def queue(self, batch, env, ctx):
         """Deliver queued reminders independently and retry transient failures."""
         print(f"reminder_queue_batch_start count={len(batch.messages)}")
         sent = skipped = failed = 0
@@ -428,13 +433,14 @@ class Default(WorkerEntrypoint):
                     continue
 
                 try:
-                    await self._telegram_request(
-                        "sendMessage", {
+                    telegram_payload = {
                             "chat_id": chat_id,
                             "text": text,
                             "reply_markup": body.get("reply_markup"),
                         }
-                    )
+                    if body.get("parse_mode"):
+                        telegram_payload["parse_mode"] = body["parse_mode"]
+                    await self._telegram_request("sendMessage", telegram_payload)
                 except Exception as exc:
                     print(f"reminder_telegram_failed error={type(exc).__name__}")
                     failed += 1
