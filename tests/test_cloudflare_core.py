@@ -26,6 +26,7 @@ from app.cloudflare_core import (
     plan_page_keyboard,
     registration_required,
     reminder_message,
+    reminder_keyboard,
     reminders_keyboard,
     reminders_settings_message,
     leaderboard_settings_message,
@@ -274,11 +275,14 @@ class CloudflareCoreTests(unittest.TestCase):
     def test_reminder_uses_only_the_approved_fixed_template(self) -> None:
         self.assertEqual(
             reminder_message(24, "ጥቅምት 24", "2026-11-03", "ዘፍጥረት 35-37"),
-            "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-            "የዛሬ ንባብ · ቀን 24\n"
-            "ጥቅምት 24 · 2026-11-03\n"
-            "ዘፍጥረት 35-37",
+            "🔔 Just a little reminder, ተወዳጆች!\n\n"
+            "Have you had your time in God's Word today? Today's reading is waiting for you. 📖\n\n"
+            "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
+            "There's still time! Let's not miss today's time in the Word. 📖",
         )
+        button = reminder_keyboard("https://daily-verse-aastu.pages.dev", 24)["inline_keyboard"][0][0]
+        self.assertEqual(button["text"], "Open today's reading")
+        self.assertEqual(button["web_app"]["url"], "https://daily-verse-aastu.pages.dev/?day=24")
 
     def test_personal_action_keyboards_and_reminder_setting_copy(self) -> None:
         keyboard = today_keyboard("https://daily-verse-aastu.pages.dev", 24)

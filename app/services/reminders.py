@@ -16,7 +16,7 @@ from app.database import (
     prepare_reminder_deliveries,
     record_reminder_attempt,
 )
-from app.messages import DAILY_REMINDER
+from app.messages import DAILY_REMINDER, LATER_DAILY_REMINDER
 from app.reading_plan import ReadingEntry, ReadingPlan
 from app.readings import EAT, entry_for_date
 
@@ -29,8 +29,10 @@ MAX_ATTEMPTS = 5
 RETRY_DELAYS_SECONDS = (60, 300, 1800, 21600)
 
 
-def reminder_text(entry: ReadingEntry) -> str:
-    """Render the approved compact template for one shared-plan entry."""
+def reminder_text(entry: ReadingEntry, schedule_slot: str | None = None) -> str:
+    """Render the schedule-appropriate template for a shared-plan reminder."""
+    if schedule_slot in {"12:00", "18:00"}:
+        return LATER_DAILY_REMINDER
     return DAILY_REMINDER.format(
         day=entry.day,
         ethiopian_date=entry.ethiopian_date,
@@ -104,7 +106,7 @@ async def deliver_due_reminders(
             try:
                 await bot.send_message(
                     chat_id,
-                    reminder_text(entry),
+                    reminder_text(entry, slot_key),
                     reply_markup=reminder_keyboard(entry.day, mini_app_url),
                     request_timeout=15,
                 )

@@ -10,6 +10,13 @@ DAILY_REMINDER = (
     "— Daily Verse | AASTU ECSF"
 )
 
+LATER_DAILY_REMINDER = (
+    "🔔 Just a little reminder, ተወዳጆች!\n\n"
+    "Have you had your time in God's Word today? Today's reading is waiting for you. 📖\n\n"
+    "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
+    "There's still time! Let's not miss today's time in the Word. 📖"
+)
+
 REGISTRATION_REQUIRED = "Please send /start first so we can get you set up. 📖"
 
 WELCOME_INTRO = (
@@ -36,11 +43,14 @@ HELP_COMMANDS = (
 )
 
 REGISTRATION_NAME_PROMPT = (
-    "ስምዎን ያስገቡ።\n"
-    "Please enter your name."
+    "ሙሉ ስምዎን ያስገቡ (የመጀመሪያ ስምዎን ከአባትዎ ስም ጋር)።\n"
+    "Please enter your full name: first name followed by your father's name."
 )
 
-REGISTRATION_NAME_INVALID = "እባክዎ ስምዎን በትክክል ያስገቡ።\nPlease enter a valid name (2–64 characters)."
+REGISTRATION_NAME_INVALID = (
+    "እባክዎ ሙሉ ስምዎን በትክክል ያስገቡ።\n"
+    "Please enter a valid full name (2–64 characters)."
+)
 
 ACADEMIC_YEAR_OPTIONS = (
     "1st",
@@ -87,7 +97,7 @@ DELETE_ACCOUNT_CANCELLED = "Deletion cancelled. Your account and progress are un
 ACCOUNT_DELETED = "Your account and personal records have been deleted. Send /start to register again."
 
 PROFILE_EDIT_PROMPT = {
-    "name": "Send the name you want Daily Verse to use (2–64 characters).",
+    "name": "Enter your full name: first name followed by your father's name (2–64 characters).",
     "year": "Send your year of study (for example, 2 or 2nd year).",
     "department": "Send your department name (2–80 characters).",
 }

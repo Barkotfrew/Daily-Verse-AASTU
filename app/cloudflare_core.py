@@ -657,12 +657,12 @@ def journey_timeline_keyboard(entries, page: int, total_pages: int,
 
 
 def reminder_message(day: int, ethiopian_date: str, gregorian_date: str, reading: str) -> str:
-    """Format the approved fixed reminder text without generated additions."""
+    """Format the approved 12:00 and 18:00 EAT reminder copy."""
     return (
-        "ሰላም ተወዳጆች እንዴት ናችሁ? 👋👋👋\n"
-        f"የዛሬ ንባብ · ቀን {day}\n"
-        f"{ethiopian_date} · {gregorian_date}\n"
-        f"{reading}"
+        "🔔 Just a little reminder, ተወዳጆች!\n\n"
+        "Have you had your time in God's Word today? Today's reading is waiting for you. 📖\n\n"
+        "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
+        "There's still time! Let's not miss today's time in the Word. 📖"
     )
 
 
