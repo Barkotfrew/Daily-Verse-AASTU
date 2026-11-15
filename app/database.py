@@ -4,7 +4,10 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-from app.cloudflare_core import normalize_display_name, normalize_signup_value
+from app.cloudflare_core import (
+    LEADERBOARD_PAGE_SIZE, leaderboard_cutoff_utc, leaderboard_sql,
+    normalize_display_name, normalize_signup_value,
+)
 
 
 def initialize_database(database_path: str | Path) -> None:
@@ -510,6 +513,39 @@ def leaderboard_position(
             (telegram_user_id,),
         ).fetchone()
     return (int(row[0]), int(row[1])) if row else None
+
+
+def leaderboard_page(database_path: str | Path, period: str, page: int):
+    """Return one ranked page and total opted-in participants for a period."""
+    if page < 1:
+        raise ValueError("page must be positive")
+    cutoff = leaderboard_cutoff_utc(period)
+    params = ([cutoff] if cutoff else []) + [LEADERBOARD_PAGE_SIZE, (page - 1) * LEADERBOARD_PAGE_SIZE]
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = tuple(dict(row) for row in connection.execute(
+            leaderboard_sql(period, paged=True), params
+        ).fetchall())
+        total = int(connection.execute(
+            "SELECT COUNT(*) FROM users WHERE leaderboard_opt_in=1 "
+            "AND display_name IS NOT NULL AND trim(display_name)!='' "
+            "AND academic_year IS NOT NULL AND trim(academic_year)!='' "
+            "AND department IS NOT NULL AND trim(department)!=''"
+        ).fetchone()[0])
+    return rows, total
+
+
+def leaderboard_rank_context(database_path: str | Path, period: str, telegram_user_id: int):
+    """Return an opted-in user's rank plus adjacent readers; otherwise None."""
+    cutoff = leaderboard_cutoff_utc(period)
+    # A window function returns the reader and adjacent positions in one query.
+    query = leaderboard_sql(period, neighbors=True)
+    params = ([cutoff] if cutoff else []) + [telegram_user_id, telegram_user_id]
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = tuple(dict(row) for row in connection.execute(query, params).fetchall())
+    own = next((row for row in rows if int(row["telegram_user_id"]) == telegram_user_id), None)
+    return (own, rows) if own else None
 
 
 def prepare_reminder_deliveries(

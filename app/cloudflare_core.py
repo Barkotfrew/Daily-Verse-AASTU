@@ -222,6 +222,124 @@ def format_leaderboard_message(
     return "\n".join(lines)
 
 
+LEADERBOARD_PERIODS = {"week": "This Week", "month": "This Month", "all": "All Time"}
+LEADERBOARD_PAGE_SIZE = 7
+
+
+def leaderboard_cutoff_utc(period: str, now: datetime | None = None) -> str | None:
+    """Return the UTC timestamp at the start of the selected EAT reporting period."""
+    if period not in LEADERBOARD_PERIODS:
+        raise ValueError("unknown leaderboard period")
+    if period == "all":
+        return None
+    instant = now or datetime.now(timezone.utc)
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    local = instant.astimezone(EAT)
+    start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "week":
+        start -= timedelta(days=local.weekday())
+    else:
+        start = start.replace(day=1)
+    return start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def leaderboard_sql(period: str, *, paged: bool = False, selected_user: bool = False,
+                   neighbors: bool = False) -> str:
+    """Build a ranking query; period names are validated before SQL is formed."""
+    cutoff = " AND c.completed_at >= ?" if period in {"week", "month"} else ""
+    if period not in LEADERBOARD_PERIODS:
+        raise ValueError("unknown leaderboard period")
+    if selected_user and neighbors:
+        raise ValueError("choose either one reader or adjacent readers")
+    selector = (
+        "WHERE telegram_user_id = ?" if selected_user else
+        "WHERE position BETWEEN (SELECT position-1 FROM ranked WHERE telegram_user_id = ?) "
+        "AND (SELECT position+1 FROM ranked WHERE telegram_user_id = ?)" if neighbors else ""
+    )
+    page_clause = "LIMIT ? OFFSET ?" if paged else ""
+    return f"""WITH scores AS (
+        SELECT u.telegram_user_id, u.display_name, u.academic_year,
+               COUNT(c.plan_day) AS completed
+        FROM users AS u LEFT JOIN reading_completions AS c
+          ON c.telegram_user_id = u.telegram_user_id{cutoff}
+        WHERE u.leaderboard_opt_in = 1
+          AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
+          AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
+          AND u.department IS NOT NULL AND trim(u.department) != ''
+        GROUP BY u.telegram_user_id, u.display_name, u.academic_year
+    ), ranked AS (
+        SELECT telegram_user_id, display_name, academic_year, completed,
+               ROW_NUMBER() OVER (ORDER BY completed DESC, display_name COLLATE NOCASE,
+                                  telegram_user_id) AS position
+        FROM scores
+    )
+    SELECT telegram_user_id, display_name, academic_year, completed, position
+    FROM ranked {selector}
+    ORDER BY position {page_clause}"""
+
+
+def leaderboard_keyboard(period: str, page: int, total: int, rows, *, back=False) -> dict[str, Any]:
+    """Create real, compact Telegram actions for ranking pages."""
+    if period not in LEADERBOARD_PERIODS or page < 1:
+        raise ValueError("invalid leaderboard state")
+    total_pages = max(1, (total + LEADERBOARD_PAGE_SIZE - 1) // LEADERBOARD_PAGE_SIZE)
+    page = min(page, total_pages)
+    buttons = [[{
+        "text": ("✓ " if key == period else "") + label,
+        "callback_data": f"lb:p:{key}:1",
+    } for key, label in LEADERBOARD_PERIODS.items()]]
+    for row in rows:
+        buttons.append([{
+            "text": f"{row['position']}. {row['display_name']} · {row['completed']} readings",
+            "callback_data": f"lb:r:{row['telegram_user_id']}:{period}:{page}",
+        }])
+    nav = []
+    if page > 1:
+        nav.append({"text": "← Previous", "callback_data": f"lb:p:{period}:{page - 1}"})
+    nav.append({"text": "↑ Back to top", "callback_data": f"lb:top:{period}"})
+    if page < total_pages:
+        nav.append({"text": "Next →", "callback_data": f"lb:p:{period}:{page + 1}"})
+    buttons.append(nav)
+    buttons.append([
+        {"text": "My Position", "callback_data": f"lb:me:{period}:{page}"},
+        {"text": "Refresh", "callback_data": f"lb:refresh:{period}:{page}"},
+    ])
+    buttons.append([{"text": "My Reading Journey", "callback_data": "lb:journey"}])
+    if back:
+        buttons.append([{"text": "← Back to Leaderboard", "callback_data": f"lb:p:{period}:{page}"}])
+    return {"inline_keyboard": buttons}
+
+
+def format_leaderboard_page(rows, period: str, page: int, total: int,
+                            updated_at: datetime | None = None, viewer_id: int | None = None) -> str:
+    """Render a page with restrained top-three cues and an explicit update time."""
+    if period not in LEADERBOARD_PERIODS:
+        raise ValueError("unknown leaderboard period")
+    instant = updated_at or datetime.now(timezone.utc)
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    updated = instant.astimezone(EAT).strftime("%H:%M EAT")
+    total_pages = max(1, (total + LEADERBOARD_PAGE_SIZE - 1) // LEADERBOARD_PAGE_SIZE)
+    first_rank = (page - 1) * LEADERBOARD_PAGE_SIZE + 1
+    last_rank = min(first_rank + len(rows) - 1, total)
+    range_text = f"Readers {first_rank}–{last_rank}" if rows else "No readers"
+    heading = ["READING TOGETHER", LEADERBOARD_PERIODS[period],
+               f"Page {page}/{total_pages} · {range_text} of {total}",
+               f"Opted-in readers · Updated {updated}", ""]
+    if not rows:
+        return "\n".join(heading + ["No readers have joined yet. You can opt in from Settings."])
+    for row in rows:
+        rank = int(row["position"])
+        marker = {1: "①", 2: "②", 3: "③"}.get(rank, f"{rank:02d}")
+        you = " · You" if viewer_id == int(row["telegram_user_id"]) else ""
+        heading.append(
+            f"{marker}  {row['display_name']}{you} · Year {row['academic_year']}\n"
+            f"   {row['completed']} completed readings"
+        )
+    return "\n".join(heading)
+
+
 def verify_webhook_secret(expected: str, provided: str | None) -> bool:
     """Constant-time compare for Telegram's configured webhook secret header."""
     return bool(expected and provided and hmac.compare_digest(expected, provided))
@@ -553,6 +671,7 @@ def journey_timeline_keyboard(entries, page: int, total_pages: int,
     if navigation:
         rows.append(navigation)
     rows.append([{"text": "My Reading Journey", "callback_data": "journey:home"}])
+    rows.append([{"text": "← Back to Leaderboard", "callback_data": "lb:p:all:1"}])
     return {"inline_keyboard": rows}
 
 

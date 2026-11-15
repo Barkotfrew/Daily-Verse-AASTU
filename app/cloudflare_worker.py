@@ -24,8 +24,9 @@ except ModuleNotFoundError as exc:
     from references import BOOKS, ReferenceParseError, parse_reference
     from streaks import streak_counts, streak_progress_text
 from cloudflare_core import (
-    LEADERBOARD_QUERY,
-    LEADERBOARD_POSITION_QUERY,
+    LEADERBOARD_PAGE_SIZE,
+    leaderboard_cutoff_utc,
+    leaderboard_sql,
     current_eat_date,
     completed_this_eat_week,
     books_visited_count,
@@ -34,7 +35,6 @@ from cloudflare_core import (
     journey_progress_message,
     journey_timeline_keyboard,
     journey_timeline_page,
-    format_leaderboard_message,
     format_today_message,
     format_plan_page,
     mini_app_chapter_asset_url,
@@ -74,7 +74,7 @@ from messages import (
     HELP_COMMANDS,
 )
 PROFILE_EDIT_PROMPTS = {
-    "display_name": "Send the name you want Daily Verse to use (2–64 characters).",
+    "display_name": "Enter your full name: first name followed by your father's name (2–64 characters).",
     "academic_year": "Send your year of study (for example, 2 or 2nd year).",
     "department": "Send your department name (2–80 characters).",
 }
@@ -813,17 +813,7 @@ class Default(WorkerEntrypoint):
                         "text": "Write a reflection", "callback_data": "journal:new"
                     }]]}
                 elif command == "leaderboard":
-                    result = await self.env.DB.prepare(LEADERBOARD_QUERY).all()
-                    rows = tuple(result.results) if result else ()
-                    position = await self.env.DB.prepare(
-                        LEADERBOARD_POSITION_QUERY
-                    ).bind(user_id).first()
-                    response_message = format_leaderboard_message(
-                        rows,
-                        current_user_position=(int(position["position"]) if position else None),
-                        current_user_completed=(int(position["completed"]) if position else None),
-                    )
-                    reply_markup = MAIN_MENU
+                    response_message, reply_markup = await self._leaderboard_screen("all", 1, user_id)
                 elif command == "help":
                     response_message = WELCOME_INTRO + "\n\n" + HELP_COMMANDS
                     reply_markup = MAIN_MENU
@@ -924,11 +914,44 @@ class Default(WorkerEntrypoint):
             streak_progress_text(current_streak, best_streak),
         )
         rows = [[{"text": "Reading Timeline", "callback_data": "journey:timeline:1"}]]
+        rows.append([{"text": "← Back to Leaderboard", "callback_data": "lb:p:all:1"}])
         if current_entry:
             url = self._reader_url(day=int(current_entry["plan_day"]))
             if url:
                 rows.append([{"text": "Open today’s reading", "web_app": {"url": url}}])
         return text, {"inline_keyboard": rows}
+
+    async def _leaderboard_screen(self, period, page, viewer_id):
+        from cloudflare_core import (
+            format_leaderboard_page, leaderboard_keyboard,
+        )
+        cutoff = leaderboard_cutoff_utc(period)
+        params = ([cutoff] if cutoff else []) + [LEADERBOARD_PAGE_SIZE, (page - 1) * LEADERBOARD_PAGE_SIZE]
+        total_row = await self.env.DB.prepare(
+            "SELECT COUNT(*) AS total FROM users WHERE leaderboard_opt_in=1 "
+            "AND display_name IS NOT NULL AND trim(display_name)!='' "
+            "AND academic_year IS NOT NULL AND trim(academic_year)!='' "
+            "AND department IS NOT NULL AND trim(department)!=''"
+        ).first()
+        total = int(total_row["total"]) if total_row else 0
+        total_pages = max(1, (total + LEADERBOARD_PAGE_SIZE - 1) // LEADERBOARD_PAGE_SIZE)
+        page = min(max(page, 1), total_pages)
+        params = ([cutoff] if cutoff else []) + [LEADERBOARD_PAGE_SIZE, (page - 1) * LEADERBOARD_PAGE_SIZE]
+        result = await self.env.DB.prepare(leaderboard_sql(period, paged=True)).bind(*params).all()
+        rows = tuple(result.results) if result else ()
+        return (
+            format_leaderboard_page(rows, period, page, total, viewer_id=viewer_id),
+            leaderboard_keyboard(period, page, total, rows),
+        )
+
+    async def _leaderboard_context(self, period, user_id):
+        cutoff = leaderboard_cutoff_utc(period)
+        query = leaderboard_sql(period, neighbors=True)
+        params = ([cutoff] if cutoff else []) + [user_id, user_id]
+        result = await self.env.DB.prepare(query).bind(*params).all()
+        rows = tuple(result.results) if result else ()
+        own = next((row for row in rows if int(row["telegram_user_id"]) == user_id), None)
+        return own, rows
 
     async def _handle_plan_callback(self, callback):
         callback_id = callback.get("id")
@@ -952,6 +975,81 @@ class Default(WorkerEntrypoint):
         # Telegram requires callback queries to be answered promptly. Do this
         # before D1 lookups so slow database responses cannot expire the query.
         await self._answer_callback(callback_id)
+
+        if data.startswith("lb:"):
+            if data == "lb:journey":
+                text, keyboard = await self._journey_progress(user["id"])
+                await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+                return True
+            try:
+                parts = data.split(":")
+                action = parts[1]
+                if action in {"p", "top", "refresh", "me"}:
+                    period = parts[2]
+                    page = int(parts[3]) if action in {"p", "refresh", "me"} else 1
+                elif action == "r":
+                    reader_id, period, page = int(parts[2]), parts[3], int(parts[4])
+                else:
+                    raise ValueError
+                if period not in {"week", "month", "all"} or page < 1:
+                    raise ValueError
+            except (IndexError, TypeError, ValueError):
+                await self._edit_message(chat["id"], message["message_id"],
+                    "That leaderboard action has expired. Open /leaderboard to start again.",
+                    {"inline_keyboard": [[{"text": "Open leaderboard", "callback_data": "lb:p:all:1"}]]})
+                return True
+            if action in {"p", "top", "refresh"}:
+                if action == "top":
+                    page = 1
+                text, keyboard = await self._leaderboard_screen(period, page, user["id"])
+                await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+                return True
+            own, neighbors = await self._leaderboard_context(period, user["id"] if action == "me" else reader_id)
+            if own is None:
+                if action == "me":
+                    text = "You haven’t joined the leaderboard. You can opt in from Settings whenever you like."
+                    keyboard = {"inline_keyboard": [
+                        [{"text": "← Back to Leaderboard", "callback_data": f"lb:p:{period}:{page}"}],
+                        [{"text": "My Reading Journey", "callback_data": "lb:journey"}],
+                    ]}
+                else:
+                    text, keyboard = await self._leaderboard_screen(period, page, user["id"])
+                await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+                return True
+            if action == "r":
+                days_result = await self.env.DB.prepare(
+                    "SELECT plan_day FROM reading_completions WHERE telegram_user_id = ?"
+                ).bind(reader_id).all()
+                days = {int(row["plan_day"]) for row in days_result.results} if days_result else set()
+                today = current_eat_date()
+                current = await self.env.DB.prepare(
+                    "SELECT plan_day FROM reading_plan WHERE gregorian_date = ?"
+                ).bind(today.isoformat()).first()
+                active, _best = streak_counts(days, int(current["plan_day"])) if current else (0, 0)
+                streak = f"\nReading streak · {active} days" if days and current else ""
+                period_label = {"week": "This Week", "month": "This Month", "all": "All Time"}[period]
+                text = (
+                    f"{own['display_name']} · Year {own['academic_year']}\nReader #{own['position']} · {period_label}\n"
+                    f"{own['completed']} completed readings{streak}\n\n"
+                    "Glad you’re reading with the AASTU ECSF community."
+                )
+                keyboard = {"inline_keyboard": [[{
+                    "text": "← Back to Leaderboard", "callback_data": f"lb:p:{period}:{page}"
+                }]]}
+                await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+                return True
+            above = next((row for row in neighbors if int(row["position"]) == int(own["position"]) - 1), None)
+            below = next((row for row in neighbors if int(row["position"]) == int(own["position"]) + 1), None)
+            gap = max(0, int(above["completed"]) - int(own["completed"]) + 1) if above else 0
+            above_text = f"Above · {above['display_name']} ({above['completed']})" if above else "You’re at the top of this list."
+            below_text = f"Below · {below['display_name']} ({below['completed']})" if below else "No reader is below you yet."
+            gap_text = f"{gap} more {'reading' if gap == 1 else 'readings'} to move ahead." if above else "You’re currently first."
+            period_label = {"week": "This Week", "month": "This Month", "all": "All Time"}[period]
+            text = f"MY POSITION · {period_label}\nRank #{own['position']} · {own['completed']} completed readings\n{above_text}\n{below_text}\n{gap_text}"
+            await self._edit_message(chat["id"], message["message_id"], text, {"inline_keyboard": [[{
+                "text": "← Back to Leaderboard", "callback_data": f"lb:p:{period}:{page}"
+            }]]})
+            return True
 
         if data == "journey:home":
             text, keyboard = await self._journey_progress(user["id"])
@@ -1035,6 +1133,7 @@ class Default(WorkerEntrypoint):
             rows.extend([
                 [{"text": "← Reading Timeline", "callback_data": f"journey:timeline:{(day - 1) // 6 + 1}"}],
                 [{"text": "My Reading Journey", "callback_data": "journey:home"}],
+                [{"text": "← Back to Leaderboard", "callback_data": "lb:p:all:1"}],
             ])
             await self._edit_message(chat["id"], message["message_id"], text, {"inline_keyboard": rows})
             return True

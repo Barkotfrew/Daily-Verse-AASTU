@@ -226,7 +226,8 @@ class CloudflareCoreTests(unittest.TestCase):
         self.assertEqual(page_count, 2)
         self.assertLess(text.index("Day 1"), text.index("Day 6"))
         keyboard = journey_timeline_keyboard(selected, 1, page_count)
-        self.assertEqual(keyboard["inline_keyboard"][-2][0]["callback_data"], "journey:timeline:2")
+        callbacks = [button["callback_data"] for row in keyboard["inline_keyboard"] for button in row]
+        self.assertIn("journey:timeline:2", callbacks)
         self.assertEqual(keyboard["inline_keyboard"][1][0]["callback_data"], "journey:entry:2")
         final, _, final_text = journey_timeline_page(entries, {2}, 4, 2)
         self.assertEqual([row["plan_day"] for row in final], [7])
