@@ -458,7 +458,6 @@ def build_router(
             streak_progress_text(current_streak, best_streak),
         )
         rows = [[InlineKeyboardButton(text="Reading Timeline", callback_data="journey:timeline:1")]]
-        rows.append([InlineKeyboardButton(text="← Back to Leaderboard", callback_data="lb:p:all:1")])
         if current_entry and mini_app_url:
             rows.append([InlineKeyboardButton(
                 text="Open today’s reading",
@@ -515,7 +514,6 @@ def build_router(
                     rows.append([InlineKeyboardButton(text="Mark as Read", callback_data=f"journey:mark:{day}")])
             rows.append([InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")])
             rows.append([InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")])
-            rows.append([InlineKeyboardButton(text="← Back to Leaderboard", callback_data="lb:p:all:1")])
             markup = InlineKeyboardMarkup(inline_keyboard=rows)
         elif data.startswith("journey:mark:"):
             try:
@@ -530,7 +528,7 @@ def build_router(
             mark_read(database_path, callback.from_user.id, day)
             status = "✓ Completed by you"
             text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
-            rows = [[_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")], [InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")], [InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")], [InlineKeyboardButton(text="← Back to Leaderboard", callback_data="lb:p:all:1")]]
+            rows = [[_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")], [InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")], [InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")]]
             markup = InlineKeyboardMarkup(inline_keyboard=rows)
         else:
             await callback.message.edit_text("That journey action is unavailable.")
@@ -824,12 +822,12 @@ def build_router(
         rows, total = leaderboard_page(database_path, "all", 1)
         await message.answer(
             format_leaderboard_page(rows, "all", 1, total, viewer_id=message.from_user.id),
-            reply_markup=_leaderboard_markup("all", 1, total, rows),
+            reply_markup=_leaderboard_markup("all", 1, total),
         )
 
-    def _leaderboard_markup(period: str, page: int, total: int, rows, *, back=False):
+    def _leaderboard_markup(period: str, page: int, total: int):
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-        payload = leaderboard_keyboard(period, page, total, rows, back=back)
+        payload = leaderboard_keyboard(period, page, total)
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(**button) for button in row]
             for row in payload["inline_keyboard"]
@@ -842,49 +840,18 @@ def build_router(
             return
         parts = (callback.data or "").split(":")
         await _answer_callback(callback)
-        if len(parts) == 2 and parts[1] == "journey":
-            text, markup = journey_summary(callback.from_user.id)
-            await _edit_callback_message(callback, text, reply_markup=markup)
-            return
         try:
             action = parts[1]
-            period = parts[2] if action in {"p", "top", "refresh", "me"} else parts[3]
+            period = parts[2]
             if period not in {"week", "month", "all"}:
                 raise ValueError
-            page = int(parts[3] if action in {"p", "refresh", "me"} else parts[4] if action == "r" else "1")
+            page = int(parts[3])
             if page < 1:
                 raise ValueError
         except (IndexError, ValueError):
             await _edit_callback_message(callback, "That leaderboard action has expired. Open /leaderboard to start again.")
             return
         user_id = callback.from_user.id
-        if action == "r":
-            try:
-                reader_id = int(parts[2])
-            except (IndexError, ValueError):
-                await _edit_callback_message(callback, "That reader is no longer available.")
-                return
-            context = leaderboard_rank_context(database_path, period, reader_id)
-            if not context:
-                await _edit_callback_message(callback, "That reader is no longer listed.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="← Back to Leaderboard", callback_data=f"lb:p:{period}:{page}")]
-                ]))
-                return
-            own, _neighbors = context
-            days = completed_days(database_path, reader_id)
-            today = entry_for_date(plan, eat_date())
-            active_streak, _best = streak_counts(days, today.day) if today else (0, 0)
-            streak_line = f"\nReading streak · {active_streak} days" if days and today else ""
-            text = (
-                f"{own['display_name']} · Year {own['academic_year']}\nReader #{own['position']} · "
-                f"{'This Week' if period == 'week' else 'This Month' if period == 'month' else 'All Time'}\n"
-                f"{own['completed']} completed readings{streak_line}\n\n"
-                "Glad you’re reading with the AASTU ECSF community."
-            )
-            await _edit_callback_message(callback, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="← Back to Leaderboard", callback_data=f"lb:p:{period}:{page}")]
-            ]))
-            return
         if action == "me":
             context = leaderboard_rank_context(database_path, period, user_id)
             if not context:
@@ -892,7 +859,6 @@ def build_router(
                     "You haven’t joined the leaderboard. You can opt in from Settings whenever you like.",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="← Back to Leaderboard", callback_data=f"lb:p:{period}:{page}")],
-                        [InlineKeyboardButton(text="My Reading Journey", callback_data="lb:journey")],
                     ]),
                 )
                 return
@@ -915,15 +881,12 @@ def build_router(
         if corrected_page != page:
             page = corrected_page
             rows, total = leaderboard_page(database_path, period, page)
-        if action not in {"p", "top", "refresh"}:
+        if action != "p":
             await _edit_callback_message(callback, "That leaderboard action is unavailable. Open /leaderboard to start again.")
             return
-        if action == "top":
-            page = 1
-            rows, total = leaderboard_page(database_path, period, page)
         await _edit_callback_message(callback,
             format_leaderboard_page(rows, period, page, total, viewer_id=user_id),
-            reply_markup=_leaderboard_markup(period, page, total, rows),
+            reply_markup=_leaderboard_markup(period, page, total),
         )
 
     @router.message(Command("settings"))

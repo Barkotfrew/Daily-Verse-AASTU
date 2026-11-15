@@ -279,8 +279,8 @@ def leaderboard_sql(period: str, *, paged: bool = False, selected_user: bool = F
     ORDER BY position {page_clause}"""
 
 
-def leaderboard_keyboard(period: str, page: int, total: int, rows, *, back=False) -> dict[str, Any]:
-    """Create real, compact Telegram actions for ranking pages."""
+def leaderboard_keyboard(period: str, page: int, total: int) -> dict[str, Any]:
+    """Create only period, optional paging, and personal-position actions."""
     if period not in LEADERBOARD_PERIODS or page < 1:
         raise ValueError("invalid leaderboard state")
     total_pages = max(1, (total + LEADERBOARD_PAGE_SIZE - 1) // LEADERBOARD_PAGE_SIZE)
@@ -289,54 +289,36 @@ def leaderboard_keyboard(period: str, page: int, total: int, rows, *, back=False
         "text": ("✓ " if key == period else "") + label,
         "callback_data": f"lb:p:{key}:1",
     } for key, label in LEADERBOARD_PERIODS.items()]]
-    for row in rows:
-        buttons.append([{
-            "text": f"{row['position']}. {row['display_name']} · {row['completed']} readings",
-            "callback_data": f"lb:r:{row['telegram_user_id']}:{period}:{page}",
-        }])
     nav = []
-    if page > 1:
+    if total_pages > 1 and page > 1:
         nav.append({"text": "← Previous", "callback_data": f"lb:p:{period}:{page - 1}"})
-    nav.append({"text": "↑ Back to top", "callback_data": f"lb:top:{period}"})
-    if page < total_pages:
+    if total_pages > 1 and page < total_pages:
         nav.append({"text": "Next →", "callback_data": f"lb:p:{period}:{page + 1}"})
-    buttons.append(nav)
-    buttons.append([
-        {"text": "My Position", "callback_data": f"lb:me:{period}:{page}"},
-        {"text": "Refresh", "callback_data": f"lb:refresh:{period}:{page}"},
-    ])
-    buttons.append([{"text": "My Reading Journey", "callback_data": "lb:journey"}])
-    if back:
-        buttons.append([{"text": "← Back to Leaderboard", "callback_data": f"lb:p:{period}:{page}"}])
+    if nav:
+        buttons.append(nav)
+    buttons.append([{"text": "My Position", "callback_data": f"lb:me:{period}:{page}"}])
     return {"inline_keyboard": buttons}
 
 
 def format_leaderboard_page(rows, period: str, page: int, total: int,
-                            updated_at: datetime | None = None, viewer_id: int | None = None) -> str:
-    """Render a page with restrained top-three cues and an explicit update time."""
+                            viewer_id: int | None = None) -> str:
+    """Render one concise ranked list with restrained top-three cues."""
     if period not in LEADERBOARD_PERIODS:
         raise ValueError("unknown leaderboard period")
-    instant = updated_at or datetime.now(timezone.utc)
-    if instant.tzinfo is None:
-        instant = instant.replace(tzinfo=timezone.utc)
-    updated = instant.astimezone(EAT).strftime("%H:%M EAT")
     total_pages = max(1, (total + LEADERBOARD_PAGE_SIZE - 1) // LEADERBOARD_PAGE_SIZE)
     first_rank = (page - 1) * LEADERBOARD_PAGE_SIZE + 1
     last_rank = min(first_rank + len(rows) - 1, total)
-    range_text = f"Readers {first_rank}–{last_rank}" if rows else "No readers"
-    heading = ["READING TOGETHER", LEADERBOARD_PERIODS[period],
-               f"Page {page}/{total_pages} · {range_text} of {total}",
-               f"Opted-in readers · Updated {updated}", ""]
+    range_text = f"Readers {first_rank}–{last_rank} of {total}" if rows else "No readers"
+    heading = [f"READING TOGETHER · {LEADERBOARD_PERIODS[period].upper()}",
+               f"{range_text} · Page {page}/{total_pages}", ""]
     if not rows:
         return "\n".join(heading + ["No readers have joined yet. You can opt in from Settings."])
     for row in rows:
         rank = int(row["position"])
         marker = {1: "①", 2: "②", 3: "③"}.get(rank, f"{rank:02d}")
         you = " · You" if viewer_id == int(row["telegram_user_id"]) else ""
-        heading.append(
-            f"{marker}  {row['display_name']}{you} · Year {row['academic_year']}\n"
-            f"   {row['completed']} completed readings"
-        )
+        count = int(row["completed"])
+        heading.append(f"{marker}  {row['display_name']}{you} · {count} reading{'s' if count != 1 else ''}")
     return "\n".join(heading)
 
 
@@ -671,7 +653,6 @@ def journey_timeline_keyboard(entries, page: int, total_pages: int,
     if navigation:
         rows.append(navigation)
     rows.append([{"text": "My Reading Journey", "callback_data": "journey:home"}])
-    rows.append([{"text": "← Back to Leaderboard", "callback_data": "lb:p:all:1"}])
     return {"inline_keyboard": rows}
 
 

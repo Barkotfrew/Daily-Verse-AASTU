@@ -31,37 +31,39 @@ class LeaderboardInteractionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             leaderboard_cutoff_utc("year", now)
 
-    def test_keyboard_exposes_working_period_page_reader_position_refresh_and_journey_actions(self):
-        rows = ({
-            "telegram_user_id": 1234567890,
-            "display_name": "Barki",
-            "academic_year": "2nd year",
-            "completed": 3,
-            "position": 1,
-        },)
-        keyboard = leaderboard_keyboard("week", 2, 15, rows)
+    def test_keyboard_is_minimal_and_pagination_only_appears_when_needed(self):
+        keyboard = leaderboard_keyboard("week", 2, 15)
         buttons = [button for row in keyboard["inline_keyboard"] for button in row]
         callbacks = {button["callback_data"] for button in buttons}
         self.assertIn("lb:p:week:1", callbacks)
         self.assertIn("lb:p:month:1", callbacks)
         self.assertIn("lb:p:all:1", callbacks)
-        self.assertIn("lb:r:1234567890:week:2", callbacks)
-        self.assertIn("lb:p:week:1", callbacks)  # previous page
-        self.assertIn("lb:p:week:3", callbacks)  # next page
+        self.assertIn("lb:p:week:3", callbacks)
         self.assertIn("lb:me:week:2", callbacks)
-        self.assertIn("lb:refresh:week:2", callbacks)
-        self.assertIn("lb:journey", callbacks)
+        self.assertNotIn("lb:refresh:week:2", callbacks)
+        self.assertFalse(any(callback.startswith("lb:r:") for callback in callbacks))
+        self.assertFalse(any("journey" in callback or "top" in callback for callback in callbacks))
+        self.assertEqual(len(buttons), 6)  # three periods, Previous/Next, My Position
         self.assertTrue(all(len(callback) <= 64 for callback in callbacks))
         self.assertTrue(any(button["text"] == "✓ This Week" for button in buttons))
+
+        one_page = leaderboard_keyboard("all", 1, 2)
+        self.assertEqual(len(one_page["inline_keyboard"]), 2)
+        self.assertEqual(one_page["inline_keyboard"][1][0]["callback_data"], "lb:me:all:1")
         self.assertIn("c.completed_at >= ?", leaderboard_sql("week"))
         self.assertNotIn("completed_at >=", leaderboard_sql("all"))
         self.assertIn("position BETWEEN", leaderboard_sql("all", neighbors=True))
 
-    def test_message_handles_empty_leaderboard_and_timestamp(self):
-        text = format_leaderboard_page((), "all", 1, 0,
-            datetime(2026, 11, 15, 18, 0, tzinfo=timezone.utc))
+    def test_message_is_compact_and_handles_empty_leaderboard(self):
+        text = format_leaderboard_page((), "all", 1, 0)
         self.assertIn("No readers have joined", text)
-        self.assertIn("Updated 21:00 EAT", text)
+        self.assertNotIn("Updated", text)
+        listed = format_leaderboard_page(({
+            "telegram_user_id": 7, "display_name": "Barki", "academic_year": "4th year",
+            "completed": 1, "position": 1,
+        },), "all", 1, 1, viewer_id=7)
+        self.assertIn("①  Barki · You · 1 reading", listed)
+        self.assertNotIn("Year 4th year", listed)
 
     def test_period_rankings_pages_and_neighbor_context_only_include_opted_in_readers(self):
         with tempfile.TemporaryDirectory() as directory:
