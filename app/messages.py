@@ -10,9 +10,12 @@ DAILY_REMINDER = (
     "— Daily Verse | AASTU ECSF"
 )
 
-LATER_DAILY_REMINDER = (
+MIDDAY_DAILY_REMINDER = (
     "🔔 Just a little reminder, ተወዳጆች!\n\n"
-    "Have you had your time in God's Word today? Today's reading is waiting for you. 📖\n\n"
+    "Have you had your time in God's Word today? Today's reading is waiting for you. 📖"
+)
+
+EVENING_DAILY_REMINDER = (
     "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
     "There's still time! Let's not miss today's time in the Word. 📖"
 )

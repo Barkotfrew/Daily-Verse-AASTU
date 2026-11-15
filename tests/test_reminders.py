@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 from app.database import initialize_database, register_user, save_display_name, save_signup_field
 from app.reading_plan import ReadingEntry, ReadingPlan
 from app.readings import EAT
-from app.messages import LATER_DAILY_REMINDER
+from app.messages import EVENING_DAILY_REMINDER, MIDDAY_DAILY_REMINDER
 from app.services.reminders import deliver_due_reminders, reminder_text, reminder_keyboard
 
 
@@ -97,8 +97,8 @@ class ReminderDeliveryTests(unittest.IsolatedAsyncioTestCase):
 
     def test_second_and_third_reminders_use_the_new_copy_and_open_reading_action(self) -> None:
         entry = ReadingEntry(1, "ጥቅምት 1", "ዘፍጥረት 1-3", date(2026, 10, 11))
-        self.assertEqual(reminder_text(entry, "12:00"), LATER_DAILY_REMINDER)
-        self.assertEqual(reminder_text(entry, "18:00"), LATER_DAILY_REMINDER)
+        self.assertEqual(reminder_text(entry, "12:00"), MIDDAY_DAILY_REMINDER)
+        self.assertEqual(reminder_text(entry, "18:00"), EVENING_DAILY_REMINDER)
         self.assertEqual(reminder_keyboard(1, "").inline_keyboard[0][0].text, "Open today's reading")
 
 

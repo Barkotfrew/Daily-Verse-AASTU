@@ -274,9 +274,12 @@ class CloudflareCoreTests(unittest.TestCase):
 
     def test_reminder_uses_only_the_approved_fixed_template(self) -> None:
         self.assertEqual(
-            reminder_message(24, "ጥቅምት 24", "2026-11-03", "ዘፍጥረት 35-37"),
+            reminder_message(24, "ጥቅምት 24", "2026-11-03", "ዘፍጥረት 35-37", "12:00"),
             "🔔 Just a little reminder, ተወዳጆች!\n\n"
-            "Have you had your time in God's Word today? Today's reading is waiting for you. 📖\n\n"
+            "Have you had your time in God's Word today? Today's reading is waiting for you. 📖",
+        )
+        self.assertEqual(
+            reminder_message(24, "ጥቅምት 24", "2026-11-03", "ዘፍጥረት 35-37", "18:00"),
             "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
             "There's still time! Let's not miss today's time in the Word. 📖",
         )

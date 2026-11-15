@@ -16,7 +16,7 @@ from app.database import (
     prepare_reminder_deliveries,
     record_reminder_attempt,
 )
-from app.messages import DAILY_REMINDER, LATER_DAILY_REMINDER
+from app.messages import DAILY_REMINDER, EVENING_DAILY_REMINDER, MIDDAY_DAILY_REMINDER
 from app.reading_plan import ReadingEntry, ReadingPlan
 from app.readings import EAT, entry_for_date
 
@@ -31,8 +31,10 @@ RETRY_DELAYS_SECONDS = (60, 300, 1800, 21600)
 
 def reminder_text(entry: ReadingEntry, schedule_slot: str | None = None) -> str:
     """Render the schedule-appropriate template for a shared-plan reminder."""
-    if schedule_slot in {"12:00", "18:00"}:
-        return LATER_DAILY_REMINDER
+    if schedule_slot == "12:00":
+        return MIDDAY_DAILY_REMINDER
+    if schedule_slot == "18:00":
+        return EVENING_DAILY_REMINDER
     return DAILY_REMINDER.format(
         day=entry.day,
         ethiopian_date=entry.ethiopian_date,

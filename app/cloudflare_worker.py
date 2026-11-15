@@ -359,7 +359,7 @@ class Default(WorkerEntrypoint):
         )
         message = reminder_text(
             int(plan["plan_day"]), plan["ethiopian_date"],
-            plan["gregorian_date"], plan["reading"],
+            plan["gregorian_date"], plan["reading"], schedule_slot,
         )
         batch = [
             {"body": {

@@ -656,13 +656,19 @@ def journey_timeline_keyboard(entries, page: int, total_pages: int,
     return {"inline_keyboard": rows}
 
 
-def reminder_message(day: int, ethiopian_date: str, gregorian_date: str, reading: str) -> str:
-    """Format the approved 12:00 and 18:00 EAT reminder copy."""
+def reminder_message(
+    day: int, ethiopian_date: str, gregorian_date: str, reading: str,
+    schedule_slot: str = "12:00",
+) -> str:
+    """Format the approved 12:00 or 18:00 EAT reminder copy."""
+    if schedule_slot == "18:00":
+        return (
+            "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
+            "There's still time! Let's not miss today's time in the Word. 📖"
+        )
     return (
         "🔔 Just a little reminder, ተወዳጆች!\n\n"
-        "Have you had your time in God's Word today? Today's reading is waiting for you. 📖\n\n"
-        "If you haven't read today's portion yet, this is your little reminder. ❤️\n\n"
-        "There's still time! Let's not miss today's time in the Word. 📖"
+        "Have you had your time in God's Word today? Today's reading is waiting for you. 📖"
     )
 
 
