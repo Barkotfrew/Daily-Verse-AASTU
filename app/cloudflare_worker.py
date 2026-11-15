@@ -25,6 +25,7 @@ except ModuleNotFoundError as exc:
     from streaks import streak_counts, streak_progress_text
 from cloudflare_core import (
     LEADERBOARD_QUERY,
+    LEADERBOARD_POSITION_QUERY,
     current_eat_date,
     completed_this_eat_week,
     books_visited_count,
@@ -814,7 +815,14 @@ class Default(WorkerEntrypoint):
                 elif command == "leaderboard":
                     result = await self.env.DB.prepare(LEADERBOARD_QUERY).all()
                     rows = tuple(result.results) if result else ()
-                    response_message = format_leaderboard_message(rows)
+                    position = await self.env.DB.prepare(
+                        LEADERBOARD_POSITION_QUERY
+                    ).bind(user_id).first()
+                    response_message = format_leaderboard_message(
+                        rows,
+                        current_user_position=(int(position["position"]) if position else None),
+                        current_user_completed=(int(position["completed"]) if position else None),
+                    )
                     reply_markup = MAIN_MENU
                 elif command == "help":
                     response_message = WELCOME_INTRO + "\n\n" + HELP_COMMANDS

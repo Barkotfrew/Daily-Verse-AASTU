@@ -35,6 +35,24 @@ GROUP BY u.telegram_user_id, u.display_name, u.academic_year
 ORDER BY completed DESC, u.display_name COLLATE NOCASE, u.telegram_user_id
 LIMIT 10"""
 
+LEADERBOARD_POSITION_QUERY = """WITH scores AS (
+    SELECT u.telegram_user_id, u.display_name, COUNT(c.plan_day) AS completed
+    FROM users AS u LEFT JOIN reading_completions AS c
+      ON c.telegram_user_id = u.telegram_user_id
+    WHERE u.leaderboard_opt_in = 1
+      AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
+      AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
+      AND u.department IS NOT NULL AND trim(u.department) != ''
+    GROUP BY u.telegram_user_id, u.display_name, u.academic_year
+), ranked AS (
+    SELECT telegram_user_id, completed,
+           ROW_NUMBER() OVER (
+               ORDER BY completed DESC, display_name COLLATE NOCASE, telegram_user_id
+           ) AS position
+    FROM scores
+)
+SELECT position, completed FROM ranked WHERE telegram_user_id = ?"""
+
 
 def mini_app_reader_url(
     base_url: str,
@@ -180,16 +198,27 @@ def account_delete_keyboard() -> dict[str, Any]:
     ]}
 
 
-def format_leaderboard_message(rows: tuple[dict[str, Any], ...]) -> str:
-    """Render stable leaderboard rows with only consented public fields."""
+def format_leaderboard_message(
+    rows: tuple[dict[str, Any], ...],
+    current_user_position: int | None = None,
+    current_user_completed: int | None = None,
+) -> str:
+    """Render a restrained community leaderboard and mark the viewer's position."""
     if not rows:
-        return "Reading leaderboard\n\nNo readers have joined yet. Join from Settings to appear here."
-    lines = ["Reading leaderboard", "Opted-in readers · completed readings", ""]
-    lines.extend(
-        f"{rank:02d}  {row['display_name']}  ·  Year {row['academic_year']}  ·  "
-        f"{row['completed']} readings"
-        for rank, row in enumerate(rows, start=1)
-    )
+        return "Reading together\n\nNo opted-in readers yet. Join from Settings if you’d like to take part."
+    lines = ["Reading together", "Bible plan completions · opted-in readers", ""]
+    for rank, row in enumerate(rows, start=1):
+        marker = {1: "①", 2: "②", 3: "③"}.get(rank, f"{rank:02d}")
+        you = " · You" if current_user_position == rank else ""
+        lines.extend((
+            f"{marker}  {row['display_name']}  ·  Year {row['academic_year']}{you}",
+            f"   ✓ {row['completed']} readings",
+        ))
+    if current_user_position is not None and current_user_position > len(rows):
+        lines.extend((
+            "",
+            f"Your place: #{current_user_position}  ·  {current_user_completed or 0} readings",
+        ))
     return "\n".join(lines)
 
 

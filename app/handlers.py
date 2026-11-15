@@ -32,6 +32,7 @@ from app.database import (
     register_user,
     profile_details,
     leaderboard_entries,
+    leaderboard_position,
     leaderboard_opt_in,
     signup_stage,
     set_leaderboard_opt_in,
@@ -74,6 +75,7 @@ from app.cloudflare_core import (
     JOURNEY_PAGE_SIZE,
     books_visited_count,
     completed_this_eat_week,
+    format_leaderboard_message,
     journey_progress_message,
     journey_timeline_keyboard,
     journey_timeline_page,
@@ -804,18 +806,21 @@ def build_router(
             await message.answer("Open Daily Verse in a private chat to view the leaderboard.")
             return
         rows = leaderboard_entries(database_path)
+        position = leaderboard_position(database_path, message.from_user.id)
+        position_number, personal_completed = position or (None, None)
         if not rows:
-            await message.answer(
-                "Reading leaderboard\n\nNo readers have joined yet. "
-                "Join from Settings to appear here."
-            )
+            await message.answer(format_leaderboard_message(()))
             return
-        lines = ["Reading leaderboard", "Opted-in readers · completed readings", ""]
-        lines.extend(
-            f"{rank:02d}  {name}  ·  Year {year}  ·  {count} readings"
-            for rank, (_user_id, name, year, count) in enumerate(rows, start=1)
-        )
-        await message.answer("\n".join(lines))
+        formatted_rows = tuple({
+            "display_name": name,
+            "academic_year": year,
+            "completed": count,
+        } for _user_id, name, year, count in rows)
+        await message.answer(format_leaderboard_message(
+            formatted_rows,
+            current_user_position=position_number,
+            current_user_completed=personal_completed,
+        ))
 
     @router.message(Command("settings"))
     @router.message(F.text == "Settings")

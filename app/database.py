@@ -481,6 +481,37 @@ def leaderboard_entries(
     return tuple((int(row[0]), str(row[1]), str(row[2]), int(row[3])) for row in rows)
 
 
+def leaderboard_position(
+    database_path: str | Path, telegram_user_id: int
+) -> tuple[int, int] | None:
+    """Return an opted-in user's rank and completions using leaderboard ordering."""
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            """WITH scores AS (
+                   SELECT u.telegram_user_id, u.display_name,
+                          COUNT(c.plan_day) AS completed
+                   FROM users AS u
+                   LEFT JOIN reading_completions AS c
+                     ON c.telegram_user_id = u.telegram_user_id
+                   WHERE u.leaderboard_opt_in = 1
+                     AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
+                     AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
+                     AND u.department IS NOT NULL AND trim(u.department) != ''
+                   GROUP BY u.telegram_user_id, u.display_name, u.academic_year
+               ), ranked AS (
+                   SELECT telegram_user_id, completed,
+                          ROW_NUMBER() OVER (
+                              ORDER BY completed DESC, display_name COLLATE NOCASE,
+                                       telegram_user_id
+                          ) AS position
+                   FROM scores
+               )
+               SELECT position, completed FROM ranked WHERE telegram_user_id = ?""",
+            (telegram_user_id,),
+        ).fetchone()
+    return (int(row[0]), int(row[1])) if row else None
+
+
 def prepare_reminder_deliveries(
     database_path: str | Path, reminder_date: str, plan_day: int, schedule_slot: str = "06:00"
 ) -> None:
