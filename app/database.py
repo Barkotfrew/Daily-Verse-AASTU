@@ -61,6 +61,18 @@ def initialize_database(database_path: str | Path) -> None:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS reading_sessions (
+                    telegram_user_id INTEGER NOT NULL,
+                    plan_day INTEGER NOT NULL CHECK (plan_day > 0),
+                    started_at INTEGER NOT NULL,
+                    PRIMARY KEY (telegram_user_id, plan_day),
+                    FOREIGN KEY (telegram_user_id)
+                        REFERENCES users (telegram_user_id) ON DELETE CASCADE
+                )
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS journal_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     telegram_user_id INTEGER NOT NULL,
@@ -336,6 +348,53 @@ def mark_read(database_path: str | Path, telegram_user_id: int, plan_day: int) -
                 (telegram_user_id, plan_day),
             )
     return cursor.rowcount == 1
+
+
+def start_reading_session(
+    database_path: str | Path, telegram_user_id: int, plan_day: int,
+    started_at: int | None = None,
+) -> bool:
+    """Start a personal reading session once; repeated taps do not reset its timer."""
+    import time
+
+    register_user(database_path, telegram_user_id)
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            cursor = connection.execute(
+                "INSERT OR IGNORE INTO reading_sessions "
+                "(telegram_user_id, plan_day, started_at) VALUES (?, ?, ?)",
+                (telegram_user_id, plan_day, int(time.time()) if started_at is None else started_at),
+            )
+    return cursor.rowcount == 1
+
+
+def reading_session_elapsed(
+    database_path: str | Path, telegram_user_id: int, plan_day: int,
+    now: int | None = None,
+) -> int | None:
+    """Return elapsed seconds for this user's session, or None when it hasn't started."""
+    import time
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        row = connection.execute(
+            "SELECT started_at FROM reading_sessions "
+            "WHERE telegram_user_id = ? AND plan_day = ?",
+            (telegram_user_id, plan_day),
+        ).fetchone()
+    if row is None:
+        return None
+    return max(0, (int(time.time()) if now is None else now) - int(row[0]))
+
+
+def clear_reading_session(
+    database_path: str | Path, telegram_user_id: int, plan_day: int,
+) -> None:
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "DELETE FROM reading_sessions WHERE telegram_user_id = ? AND plan_day = ?",
+                (telegram_user_id, plan_day),
+            )
 
 
 def completed_days(database_path: str | Path, telegram_user_id: int) -> tuple[int, ...]:

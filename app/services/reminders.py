@@ -44,7 +44,7 @@ def reminder_text(entry: ReadingEntry, schedule_slot: str | None = None) -> str:
 
 
 def reminder_keyboard(day: int, mini_app_url: str) -> InlineKeyboardMarkup:
-    read_button = InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}")
+    read_button = InlineKeyboardButton(text="Start reading", callback_data=f"session:start:{day}")
     if mini_app_url:
         from urllib.parse import urlencode
 

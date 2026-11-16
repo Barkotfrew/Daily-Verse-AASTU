@@ -14,6 +14,7 @@ except ModuleNotFoundError as exc:
 
 EAT = timezone(timedelta(hours=3), name="EAT")
 JOURNEY_PAGE_SIZE = 6
+READING_SESSION_MIN_SECONDS = 5 * 60
 
 
 def page_for_day(day: int, page_size: int = 14) -> int:
@@ -104,17 +105,29 @@ def mini_app_reader_keyboard(base_url: str, day: int) -> dict[str, Any] | None:
 
 
 def reminder_keyboard(base_url: str, day: int) -> dict[str, Any]:
-    """Open today's assigned chapters directly from a scheduled reminder."""
+    """Offer the assigned reading and a deliberate start-session action."""
     url = mini_app_reader_url(base_url, day=day)
     button = {"text": "Open today's reading"}
     if url:
         button["web_app"] = {"url": url}
     else:
         button["callback_data"] = f"plan:{day}"
-    return {"inline_keyboard": [[button]]}
+    return {"inline_keyboard": [[button], [reading_session_button(day)]]}
 
 
-def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str, Any]:
+def reading_session_button(
+    day: int, *, completed: bool = False, session_started: bool = False,
+) -> dict[str, str]:
+    if completed:
+        return {"text": "✅ Reading complete", "callback_data": f"session:finish:{day}"}
+    if session_started:
+        return {"text": "Finish reading", "callback_data": f"session:finish:{day}"}
+    return {"text": "Start reading", "callback_data": f"session:start:{day}"}
+
+
+def today_keyboard(
+    base_url: str, day: int, completed: bool = False, session_started: bool = False,
+) -> dict[str, Any]:
     """Build an interactive today's-reading keyboard with reading and reflection actions."""
     rows = []
     reader = mini_app_reader_keyboard(base_url, day)
@@ -127,10 +140,12 @@ def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str
                 "text": "📝 Reflect",
                 "web_app": {"url": f"{base_url.rstrip('/')}/?{params}"},
             }])
-    rows.append([{
-        "text": "✅ Reading complete" if completed else "✅ Mark as Read",
-        "callback_data": f"complete:{day}",
-    }])
+    session_button = reading_session_button(
+        day, completed=completed, session_started=session_started,
+    )
+    if not completed and not session_started:
+        session_button["callback_data"] = f"complete:{day}"
+    rows.append([session_button])
     rows.append([{
         "text": "🗓 View Reading Plan",
         # Keep this calculation local to the keyboard builder. In the deployed
@@ -141,12 +156,15 @@ def today_keyboard(base_url: str, day: int, completed: bool = False) -> dict[str
 
 
 def completion_button(
-    day: int, completed: bool = False, callback_prefix: str = "complete"
+    day: int, completed: bool = False, callback_prefix: str = "complete",
+    session_started: bool = False,
 ) -> list[dict[str, str]]:
-    return [{
-        "text": "✓ Read" if completed else "Mark as Read",
-        "callback_data": f"{callback_prefix}:{day}",
-    }]
+    button = reading_session_button(
+        day, completed=completed, session_started=session_started,
+    )
+    if not completed and not session_started:
+        button["callback_data"] = f"{callback_prefix}:{day}"
+    return [button]
 
 
 def reminders_keyboard(enabled: bool) -> dict[str, Any]:

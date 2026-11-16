@@ -31,6 +31,7 @@ from cloudflare_core import (
     completed_this_eat_week,
     books_visited_count,
     completion_button,
+    READING_SESSION_MIN_SECONDS,
     format_progress_message,
     journey_progress_message,
     journey_timeline_keyboard,
@@ -42,6 +43,7 @@ from cloudflare_core import (
     mini_app_reader_url,
     scheduled_reminder_message,
     reminder_keyboard,
+    reading_session_button,
     reminders_settings_message,
     leaderboard_settings_message,
     settings_keyboard,
@@ -733,6 +735,10 @@ class Default(WorkerEntrypoint):
                             "SELECT 1 AS completed FROM reading_completions "
                             "WHERE telegram_user_id = ? AND plan_day = ?"
                         ).bind(user_id, entry["plan_day"]).first()
+                        session = await self.env.DB.prepare(
+                            "SELECT 1 AS started FROM reading_sessions "
+                            "WHERE telegram_user_id = ? AND plan_day = ?"
+                        ).bind(user_id, entry["plan_day"]).first()
                         response_message = format_today_message(
                             entry, current_date, completed is not None
                         )
@@ -740,6 +746,7 @@ class Default(WorkerEntrypoint):
                             getattr(self.env, "MINI_APP_URL", ""),
                             int(entry["plan_day"]),
                             completed is not None,
+                            session is not None,
                         )
                     else:
                         response_message = format_today_message(entry, current_date)
@@ -954,6 +961,126 @@ class Default(WorkerEntrypoint):
         own = next((row for row in rows if int(row["telegram_user_id"]) == user_id), None)
         return own, rows
 
+    async def _handle_reading_session_callback(self, callback_id, user_id, chat_id, message, data):
+        parts = data.split(":")
+        try:
+            if parts[0] == "session" and len(parts) == 3 and parts[1] in {"start", "finish"}:
+                action, day = parts[1], int(parts[2])
+            elif parts[0] in {"complete", "plancomplete", "journey"}:
+                action, day = "start", int(parts[-1])
+            else:
+                raise ValueError
+        except (IndexError, TypeError, ValueError):
+            await self._answer_callback(callback_id, "That plan day is invalid.", True)
+            return True
+
+        entry = await self.env.DB.prepare(
+            "SELECT plan_day, ethiopian_date, reading, gregorian_date "
+            "FROM reading_plan WHERE plan_day = ?"
+        ).bind(day).first()
+        if entry is None:
+            await self._answer_callback(callback_id, "That day is outside the reading plan.", True)
+            return True
+        if date.fromisoformat(entry["gregorian_date"]) > current_eat_date():
+            await self._answer_callback(callback_id, "Upcoming readings can’t be marked complete yet.", True)
+            return True
+        completed = await self.env.DB.prepare(
+            "SELECT 1 AS completed FROM reading_completions "
+            "WHERE telegram_user_id = ? AND plan_day = ?"
+        ).bind(user_id, day).first()
+        if completed:
+            await self._answer_callback(callback_id, "This reading is already complete.")
+            return True
+
+        if action == "start":
+            await self.env.DB.prepare(
+                "INSERT OR IGNORE INTO reading_sessions "
+                "(telegram_user_id, plan_day, started_at) VALUES (?, ?, ?)"
+            ).bind(user_id, day, int(time.time())).run()
+            session_started = True
+            await self._answer_callback(
+                callback_id, "Session started. Read from your hardcopy, then come back to finish."
+            )
+        else:
+            session = await self.env.DB.prepare(
+                "SELECT started_at FROM reading_sessions "
+                "WHERE telegram_user_id = ? AND plan_day = ?"
+            ).bind(user_id, day).first()
+            if session is None:
+                await self._answer_callback(callback_id, "Start your reading session first.", True)
+                return True
+            elapsed = max(0, int(time.time()) - int(session["started_at"]))
+            if elapsed < READING_SESSION_MIN_SECONDS:
+                await self._answer_callback(
+                    callback_id,
+                    "You’re still in your reading session 📖 Come back to this step after spending time with today’s chapters.",
+                )
+                return True
+            await self.env.DB.prepare(
+                "INSERT OR IGNORE INTO reading_completions "
+                "(telegram_user_id, plan_day) VALUES (?, ?)"
+            ).bind(user_id, day).run()
+            await self.env.DB.prepare(
+                "DELETE FROM reading_sessions WHERE telegram_user_id = ? AND plan_day = ?"
+            ).bind(user_id, day).run()
+            session_started = False
+            completed = True
+            await self._answer_callback(callback_id, "Reading marked complete. Well done!")
+
+        is_journey = data.startswith("journey:") or str(message.get("text", "")).startswith("My Reading Journey · Day")
+        is_today = str(message.get("text", "")).startswith("📖 TODAY’S READING")
+        if is_journey:
+            today = current_eat_date()
+            current = await self.env.DB.prepare(
+                "SELECT 1 AS current FROM reading_plan WHERE plan_day = ? AND gregorian_date = ?"
+            ).bind(day, today.isoformat()).first()
+            status = (
+                "✓ Completed by you" if completed else
+                "◌ Reading session in progress" if session_started else
+                "◉ Current shared reading · not yet completed by you" if current else
+                "○ Not completed yet"
+            )
+            text = (
+                f"My Reading Journey · Day {day}\n{entry['ethiopian_date']} · "
+                f"{entry['gregorian_date']}\n{entry['reading']}\n\n{status}"
+            )
+            rows = []
+            reader = self._reader_keyboard(day)
+            if reader:
+                rows.extend(reader["inline_keyboard"])
+            rows.append([reading_session_button(
+                day, completed=bool(completed), session_started=session_started,
+            )])
+            rows.extend([
+                [{"text": "← Reading Timeline", "callback_data": f"journey:timeline:{(day - 1) // 6 + 1}"}],
+                [{"text": "My Reading Journey", "callback_data": "journey:home"}],
+            ])
+            await self._edit_message(chat_id, message["message_id"], text, {"inline_keyboard": rows})
+            return True
+
+        if is_today:
+            keyboard = today_keyboard(
+                getattr(self.env, "MINI_APP_URL", ""), day,
+                completed=bool(completed), session_started=session_started,
+            )
+            if completed:
+                text = format_today_message(entry, current_eat_date(), completed=True)
+                await self._edit_message(chat_id, message["message_id"], text, keyboard)
+            else:
+                await self._edit_reply_markup(chat_id, message["message_id"], keyboard)
+            return True
+
+        plan_total = await self.env.DB.prepare("SELECT COUNT(*) AS total FROM reading_plan").first()
+        keyboard = plan_day_keyboard(day, int(plan_total["total"]) if plan_total else 0)
+        keyboard["inline_keyboard"].append(completion_button(
+            day, bool(completed), "plancomplete", session_started=session_started,
+        ))
+        reader = self._reader_keyboard(day)
+        if reader:
+            keyboard["inline_keyboard"].extend(reader["inline_keyboard"])
+        await self._edit_reply_markup(chat_id, message["message_id"], keyboard)
+        return True
+
     async def _handle_plan_callback(self, callback):
         callback_id = callback.get("id")
         user = callback.get("from") or {}
@@ -972,6 +1099,11 @@ class Default(WorkerEntrypoint):
                     callback_id, "This action is available in a private chat.", True
                 )
             return True
+
+        if data.startswith(("session:", "complete:", "plancomplete:", "journey:mark:")):
+            return await self._handle_reading_session_callback(
+                callback_id, user["id"], chat["id"], message, data
+            )
 
         # Telegram requires callback queries to be answered promptly. Do this
         # before D1 lookups so slow database responses cannot expire the query.
@@ -1074,17 +1206,19 @@ class Default(WorkerEntrypoint):
                 if upcoming:
                     await self._edit_message(chat["id"], message["message_id"], "Upcoming readings can’t be marked complete yet.", journey_home_keyboard)
                     return True
-                await self.env.DB.prepare(
-                    "INSERT OR IGNORE INTO reading_completions (telegram_user_id, plan_day) VALUES (?, ?)"
-                ).bind(user["id"], day).run()
             completed = await self.env.DB.prepare(
                 "SELECT 1 AS completed FROM reading_completions WHERE telegram_user_id = ? AND plan_day = ?"
+            ).bind(user["id"], day).first()
+            session = await self.env.DB.prepare(
+                "SELECT 1 AS started FROM reading_sessions "
+                "WHERE telegram_user_id = ? AND plan_day = ?"
             ).bind(user["id"], day).first()
             current = await self.env.DB.prepare(
                 "SELECT 1 AS current FROM reading_plan WHERE plan_day = ? AND gregorian_date = ?"
             ).bind(day, today.isoformat()).first()
             status = (
                 "✓ Completed by you" if completed else
+                "◌ Reading session in progress" if session else
                 "◉ Current shared reading · not yet completed by you" if current else
                 "· Upcoming reading" if upcoming else "○ Not completed yet"
             )
@@ -1098,7 +1232,7 @@ class Default(WorkerEntrypoint):
                 if reader:
                     rows.extend(reader["inline_keyboard"])
                 if not completed:
-                    rows.append([{"text": "Mark as Read", "callback_data": f"journey:mark:{day}"}])
+                    rows.append([reading_session_button(day, session_started=session is not None)])
             rows.extend([
                 [{"text": "← Reading Timeline", "callback_data": f"journey:timeline:{(day - 1) // 6 + 1}"}],
                 [{"text": "My Reading Journey", "callback_data": "journey:home"}],
@@ -1240,52 +1374,6 @@ class Default(WorkerEntrypoint):
             )
             return True
 
-        is_plan_completion = data.startswith("plancomplete:")
-        if data.startswith("complete:") or is_plan_completion:
-            try:
-                day = int(data.split(":", 1)[1])
-            except ValueError:
-                return True
-            entry = await self.env.DB.prepare(
-                "SELECT plan_day FROM reading_plan WHERE plan_day = ?"
-            ).bind(day).first()
-            if entry is None:
-                return True
-            await self.env.DB.prepare(
-                "INSERT OR IGNORE INTO reading_completions "
-                "(telegram_user_id, plan_day) VALUES (?, ?)"
-            ).bind(user["id"], day).run()
-            if is_plan_completion:
-                plan_total = await self.env.DB.prepare(
-                    "SELECT COUNT(*) AS total FROM reading_plan"
-                ).first()
-                total_days = int(plan_total["total"]) if plan_total else 0
-                keyboard = plan_day_keyboard(day, total_days)
-                keyboard["inline_keyboard"].append(
-                    completion_button(day, True, "plancomplete")
-                )
-                reader_keyboard = self._reader_keyboard(day)
-                if reader_keyboard:
-                    keyboard["inline_keyboard"].extend(reader_keyboard["inline_keyboard"])
-            else:
-                keyboard = today_keyboard(
-                    getattr(self.env, "MINI_APP_URL", ""), day, completed=True
-                )
-                if str(message.get("text", "")).startswith("📖 TODAY’S READING"):
-                    today_entry = await self.env.DB.prepare(
-                        "SELECT plan_day, ethiopian_date, reading, gregorian_date "
-                        "FROM reading_plan WHERE plan_day = ?"
-                    ).bind(day).first()
-                    if today_entry:
-                        await self._edit_message(
-                            chat["id"], message["message_id"],
-                            format_today_message(today_entry, current_eat_date(), completed=True),
-                            keyboard,
-                        )
-                        return True
-            await self._edit_reply_markup(chat["id"], message["message_id"], keyboard)
-            return True
-
         total_row = await self.env.DB.prepare(
             "SELECT COUNT(*) AS total FROM reading_plan"
         ).first()
@@ -1326,8 +1414,14 @@ class Default(WorkerEntrypoint):
                 "SELECT 1 AS completed FROM reading_completions "
                 "WHERE telegram_user_id = ? AND plan_day = ?"
             ).bind(user["id"], day).first()
+            session = await self.env.DB.prepare(
+                "SELECT 1 AS started FROM reading_sessions "
+                "WHERE telegram_user_id = ? AND plan_day = ?"
+            ).bind(user["id"], day).first()
             keyboard["inline_keyboard"].append(
-                completion_button(day, completion is not None, "plancomplete")
+                completion_button(
+                    day, completion is not None, "plancomplete", session_started=session is not None,
+                )
             )
             reader_keyboard = self._reader_keyboard(day)
             if reader_keyboard:

@@ -29,6 +29,9 @@ from app.database import (
     journal_entry,
     journal_entries,
     mark_read,
+    start_reading_session,
+    reading_session_elapsed,
+    clear_reading_session,
     register_user,
     profile_details,
     leaderboard_page,
@@ -73,6 +76,7 @@ from app.readings import (
 )
 from app.cloudflare_core import (
     JOURNEY_PAGE_SIZE,
+    READING_SESSION_MIN_SECONDS,
     books_visited_count,
     completed_this_eat_week,
     format_leaderboard_page,
@@ -173,6 +177,7 @@ def _entry_keyboard(
     mini_app_url: str,
     in_private_chat: bool,
     completed: bool = False,
+    session_started: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = [[_read_chapters_button(day, mini_app_url, in_private_chat)]]
     if mini_app_url and in_private_chat:
@@ -182,8 +187,8 @@ def _entry_keyboard(
         )])
     rows.extend([
         [InlineKeyboardButton(
-            text="✅ Reading complete" if completed else "✅ Mark as Read",
-            callback_data=f"complete:{day}",
+            text="✅ Reading complete" if completed else "Finish reading" if session_started else "Start reading",
+            callback_data=f"session:finish:{day}" if session_started or completed else f"session:start:{day}",
         )],
         [InlineKeyboardButton(
             text="🗓 View Reading Plan",
@@ -204,6 +209,8 @@ def _plan_keyboard(
     final_day: int,
     mini_app_url: str,
     in_private_chat: bool,
+    session_started: bool = False,
+    completed: bool = False,
 ) -> InlineKeyboardMarkup:
     row = []
     if day > 1:
@@ -218,11 +225,37 @@ def _plan_keyboard(
                 callback_data=f"planpage:{page_for_day(day, PLAN_PAGE_SIZE)}",
             )],
             [
-                InlineKeyboardButton(text="Mark as Read", callback_data=f"complete:{day}"),
+                InlineKeyboardButton(
+                    text="✅ Reading complete" if completed else "Finish reading" if session_started else "Start reading",
+                    callback_data=f"session:finish:{day}" if session_started or completed else f"session:start:{day}",
+                ),
                 _read_chapters_button(day, mini_app_url, in_private_chat),
             ],
         ]
     )
+
+
+def _set_session_button(markup, day: int, state: str):
+    if markup is None:
+        return markup
+    text = {
+        "started": "Finish reading",
+        "completed": "✅ Reading complete",
+    }.get(state, "Start reading")
+    callback_data = f"session:finish:{day}" if state in {"started", "completed"} else f"session:start:{day}"
+    rows = []
+    for row in markup.inline_keyboard:
+        updated = []
+        for button in row:
+            if button.callback_data in {
+                f"session:start:{day}", f"session:finish:{day}",
+                f"complete:{day}", f"plancomplete:{day}", f"journey:mark:{day}",
+            }:
+                updated.append(button.model_copy(update={"text": text, "callback_data": callback_data}))
+            else:
+                updated.append(button)
+        rows.append(updated)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _overview_keyboard(page: int, total_pages: int, plan: ReadingPlan) -> InlineKeyboardMarkup:
@@ -270,6 +303,10 @@ def build_router(
             )
             return
         completed = entry.day in completed_days(database_path, message.from_user.id)
+        session_started = (
+            not completed
+            and reading_session_elapsed(database_path, message.from_user.id, entry.day) is not None
+        )
         status = (
             "\n\n✅ You’ve marked this reading complete. Well done!"
             if completed
@@ -282,6 +319,7 @@ def build_router(
                 mini_app_url,
                 message.chat.type == "private",
                 completed,
+                session_started,
             ),
         )
 
@@ -470,6 +508,9 @@ def build_router(
         if callback.from_user is None:
             await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
             return
+        if callback.message and callback.message.chat.type != "private":
+            await _answer_callback(callback, "Continue your reading session in a private chat with the bot.", show_alert=True)
+            return
         data = callback.data or ""
         await _answer_callback(callback)
         if not callback.message:
@@ -502,16 +543,23 @@ def build_router(
                 await callback.message.edit_text("That reading entry is unavailable.")
                 return
             completed = day in completed_days(database_path, callback.from_user.id)
+            session_started = (
+                not completed
+                and reading_session_elapsed(database_path, callback.from_user.id, day) is not None
+            )
             today = eat_date()
             current = entry_for_date(plan, today)
             upcoming = entry.gregorian_date > today
-            status = "✓ Completed by you" if completed else "◉ Current shared reading · not yet completed by you" if current and day == current.day else "· Upcoming reading" if upcoming else "○ Not completed yet"
+            status = "✓ Completed by you" if completed else "◌ Reading session in progress" if session_started else "◉ Current shared reading · not yet completed by you" if current and day == current.day else "· Upcoming reading" if upcoming else "○ Not completed yet"
             text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
             rows = []
             if not upcoming:
                 rows.append([_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")])
                 if not completed:
-                    rows.append([InlineKeyboardButton(text="Mark as Read", callback_data=f"journey:mark:{day}")])
+                    rows.append([InlineKeyboardButton(
+                        text="Finish reading" if session_started else "Start reading",
+                        callback_data=f"session:finish:{day}" if session_started else f"session:start:{day}",
+                    )])
             rows.append([InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")])
             rows.append([InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")])
             markup = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -525,10 +573,10 @@ def build_router(
             if entry is None or entry.gregorian_date > eat_date():
                 await callback.message.edit_text("Upcoming readings can’t be marked complete yet.")
                 return
-            mark_read(database_path, callback.from_user.id, day)
-            status = "✓ Completed by you"
+            start_reading_session(database_path, callback.from_user.id, day)
+            status = "◌ Reading session in progress"
             text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
-            rows = [[_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")], [InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")], [InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")]]
+            rows = [[_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")], [InlineKeyboardButton(text="Finish reading", callback_data=f"session:finish:{day}")], [InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")], [InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")]]
             markup = InlineKeyboardMarkup(inline_keyboard=rows)
         else:
             await callback.message.edit_text("That journey action is unavailable.")
@@ -548,6 +596,11 @@ def build_router(
             return
         await _answer_callback(callback)
         if callback.message:
+            completed = day in completed_days(database_path, callback.from_user.id) if callback.from_user else False
+            session_started = (
+                not completed and callback.from_user is not None
+                and reading_session_elapsed(database_path, callback.from_user.id, day) is not None
+            )
             await callback.message.edit_text(
                 "Reading Plan · selected day\n" + format_reading_entry(entry),
                 reply_markup=_plan_keyboard(
@@ -555,35 +608,80 @@ def build_router(
                     plan.final_day,
                     mini_app_url,
                     callback.message.chat.type == "private",
+                    session_started,
+                    completed,
                 ),
             )
 
+    @router.callback_query(F.data.startswith("session:"))
     @router.callback_query(F.data.startswith("complete:"))
     async def complete_reading(callback: CallbackQuery) -> None:
         if callback.from_user is None:
             await _answer_callback(callback, "Could not identify your Telegram account.", show_alert=True)
             return
+        if callback.message and callback.message.chat.type != "private":
+            await _answer_callback(callback, "Continue your reading session in a private chat with the bot.", show_alert=True)
+            return
+        parts = (callback.data or "").split(":")
         try:
-            day = int(callback.data.split(":", 1)[1])
+            if parts[0] == "session" and len(parts) == 3 and parts[1] in {"start", "finish"}:
+                action, day = parts[1], int(parts[2])
+            elif parts[0] == "complete":
+                action, day = "start", int(parts[1])
+            else:
+                raise ValueError
         except (AttributeError, ValueError):
             await _answer_callback(callback, "That plan day is invalid.", show_alert=True)
             return
         if plan.get_day(day) is None:
             await _answer_callback(callback, "That day is outside the reading plan.", show_alert=True)
             return
-        inserted = mark_read(database_path, callback.from_user.id, day)
-        await _answer_callback(callback, "Marked as read." if inserted else "Already marked as read.")
-        if (
-            callback.message
-            and callback.message.text
-            and callback.message.text.startswith("📖 TODAY’S READING")
-        ):
-            await callback.message.edit_text(
-                "📖 TODAY’S READING\n"
-                + format_reading_entry(plan.get_day(day))
-                + "\n\n✅ You’ve marked this reading complete. Well done!",
-                reply_markup=_entry_keyboard(day, mini_app_url, True, completed=True),
+        if plan.get_day(day).gregorian_date > eat_date():
+            await _answer_callback(callback, "Upcoming readings can’t be marked complete yet.", show_alert=True)
+            return
+        if day in completed_days(database_path, callback.from_user.id):
+            await _answer_callback(callback, "This reading is already complete.")
+            return
+        if action == "start":
+            start_reading_session(database_path, callback.from_user.id, day)
+            await _answer_callback(callback, "Session started. Read from your hardcopy, then come back to finish.")
+            if callback.message:
+                markup = _set_session_button(callback.message.reply_markup, day, "started")
+                await callback.message.edit_reply_markup(reply_markup=markup)
+            return
+
+        elapsed = reading_session_elapsed(database_path, callback.from_user.id, day)
+        if elapsed is None:
+            await _answer_callback(callback, "Start your reading session first.", show_alert=True)
+            return
+        if elapsed < READING_SESSION_MIN_SECONDS:
+            await _answer_callback(
+                callback,
+                "You’re still in your reading session 📖 Come back to this step after spending time with today’s chapters.",
             )
+            return
+        inserted = mark_read(database_path, callback.from_user.id, day)
+        clear_reading_session(database_path, callback.from_user.id, day)
+        await _answer_callback(callback, "Reading marked complete. Well done!" if inserted else "This reading is already complete.")
+        if callback.message:
+            markup = _set_session_button(callback.message.reply_markup, day, "completed")
+            message_text = callback.message.text or ""
+            if message_text.startswith("📖 TODAY’S READING"):
+                await callback.message.edit_text(
+                    "📖 TODAY’S READING\n"
+                    + format_reading_entry(plan.get_day(day))
+                    + "\n\n✅ You’ve marked this reading complete. Well done!",
+                    reply_markup=_entry_keyboard(day, mini_app_url, True, completed=True),
+                )
+            else:
+                updated_text = message_text.replace(
+                    "○ Not completed yet", "✓ Completed by you"
+                ).replace(
+                    "◉ Current shared reading · not yet completed by you", "✓ Completed by you"
+                )
+                await callback.message.edit_text(
+                    updated_text, reply_markup=markup,
+                )
 
     @router.callback_query(F.data.startswith("chapters:"))
     async def read_chapters(callback: CallbackQuery) -> None:
