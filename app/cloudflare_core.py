@@ -686,6 +686,18 @@ def morning_reminder_message(day: int, ethiopian_date: str, gregorian_date: str,
     )
 
 
+def scheduled_reminder_message(
+    day: int, ethiopian_date: str, gregorian_date: str, reading: str,
+    schedule_slot: str,
+) -> str:
+    """Format one reminder using the right slot-specific template and signature."""
+    if schedule_slot == "06:00":
+        return morning_reminder_message(day, ethiopian_date, gregorian_date, reading)
+    if schedule_slot in {"12:00", "18:00"}:
+        return reminder_message(day, ethiopian_date, gregorian_date, reading, schedule_slot)
+    raise ValueError(f"Unsupported reminder schedule slot: {schedule_slot}")
+
+
 def escape_sql_text(value: str) -> str:
     """Quote one SQLite text literal for a generated seed SQL file."""
     return "'" + value.replace("'", "''") + "'"

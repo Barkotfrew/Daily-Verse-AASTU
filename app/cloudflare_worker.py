@@ -40,8 +40,7 @@ from cloudflare_core import (
     mini_app_chapter_asset_url,
     mini_app_reader_keyboard,
     mini_app_reader_url,
-    reminder_message,
-    morning_reminder_message,
+    scheduled_reminder_message,
     reminder_keyboard,
     reminders_settings_message,
     leaderboard_settings_message,
@@ -300,9 +299,7 @@ class Default(WorkerEntrypoint):
         """Queue one bounded subscriber batch for the active 06/12/18 EAT window."""
         cron = getattr(controller, "cron", "")
         print(f"reminder_cron_start cron={cron}")
-        is_regular_reminder_cron = cron == "0 3,9,15 * * *"
-        is_makeup_reminder_cron = cron == "15 4 16 11 *"
-        if not (is_regular_reminder_cron or is_makeup_reminder_cron):
+        if cron != "0 3,9,15 * * *":
             print("reminder_cron_skip reason=unrecognized_cron")
             return
         timestamp = int(controller.scheduledTime)
@@ -311,11 +308,7 @@ class Default(WorkerEntrypoint):
 
         scheduled_at = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
         eat_hour = (scheduled_at.hour + 3) % 24
-        schedule_slot = (
-            "06:00"
-            if is_makeup_reminder_cron and eat_hour == 7 and scheduled_at.minute == 15
-            else f"{eat_hour:02d}:00"
-        )
+        schedule_slot = f"{eat_hour:02d}:00"
         if schedule_slot not in {"06:00", "12:00", "18:00"}:
             print("reminder_cron_skip reason=invalid_slot")
             return
@@ -360,17 +353,9 @@ class Default(WorkerEntrypoint):
             for user in users
         ]
         await self.env.DB.batch(insert_statements)
-        reminder_text = (
-            morning_reminder_message if schedule_slot == "06:00" else reminder_message
-        )
-        reminder_args = (
+        message = scheduled_reminder_message(
             int(plan["plan_day"]), plan["ethiopian_date"],
-            plan["gregorian_date"], plan["reading"],
-        )
-        message = (
-            reminder_text(*reminder_args)
-            if schedule_slot == "06:00"
-            else reminder_text(*reminder_args, schedule_slot)
+            plan["gregorian_date"], plan["reading"], schedule_slot,
         )
         batch = [
             {"body": {

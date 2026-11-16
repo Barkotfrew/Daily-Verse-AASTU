@@ -26,6 +26,8 @@ from app.cloudflare_core import (
     plan_page_keyboard,
     registration_required,
     reminder_message,
+    morning_reminder_message,
+    scheduled_reminder_message,
     reminder_keyboard,
     reminders_keyboard,
     reminders_settings_message,
@@ -286,6 +288,23 @@ class CloudflareCoreTests(unittest.TestCase):
         button = reminder_keyboard("https://daily-verse-aastu.pages.dev", 24)["inline_keyboard"][0][0]
         self.assertEqual(button["text"], "Open today's reading")
         self.assertEqual(button["web_app"]["url"], "https://daily-verse-aastu.pages.dev/?day=24")
+
+    def test_scheduled_reminder_formatter_routes_all_slots_safely(self) -> None:
+        args = (24, "ጥቅምት 24", "2026-11-03", "ዘፍጥረት 35-37")
+        self.assertEqual(
+            scheduled_reminder_message(*args, "06:00"),
+            morning_reminder_message(*args),
+        )
+        self.assertEqual(
+            scheduled_reminder_message(*args, "12:00"),
+            reminder_message(*args, "12:00"),
+        )
+        self.assertEqual(
+            scheduled_reminder_message(*args, "18:00"),
+            reminder_message(*args, "18:00"),
+        )
+        with self.assertRaises(ValueError):
+            scheduled_reminder_message(*args, "07:15")
 
     def test_personal_action_keyboards_and_reminder_setting_copy(self) -> None:
         keyboard = today_keyboard("https://daily-verse-aastu.pages.dev", 24)
