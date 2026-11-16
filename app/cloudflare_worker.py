@@ -330,57 +330,63 @@ class Default(WorkerEntrypoint):
         if run is None or bool(run["finished"]):
             print(f"reminder_cron_skip reason=run_finished date={reminder_date} slot={schedule_slot}")
             return
-        recipients = await self.env.DB.prepare(
-            "SELECT telegram_user_id, private_chat_id FROM users "
-            "WHERE private_chat_id IS NOT NULL AND telegram_user_id > ? "
-            "ORDER BY telegram_user_id LIMIT 100"
-        ).bind(run["last_user_id"]).all()
-        users = tuple(recipients.results) if recipients else ()
-        if not users:
-            await self.env.DB.prepare(
-                "UPDATE reminder_runs SET finished = 1 "
-                "WHERE reminder_date = ? AND schedule_slot = ?"
-            ).bind(reminder_date, schedule_slot).run()
-            print(f"reminder_cron_finished date={reminder_date} slot={schedule_slot}")
-            return
-
-        insert_statements = [
-            self.env.DB.prepare(
-                "INSERT OR IGNORE INTO reminder_deliveries "
-                "(reminder_date, schedule_slot, telegram_user_id, plan_day, status) "
-                "VALUES (?, ?, ?, ?, 'queued')"
-            ).bind(reminder_date, schedule_slot, user["telegram_user_id"], plan["plan_day"])
-            for user in users
-        ]
-        await self.env.DB.batch(insert_statements)
         message = scheduled_reminder_message(
             int(plan["plan_day"]), plan["ethiopian_date"],
             plan["gregorian_date"], plan["reading"], schedule_slot,
         )
-        batch = [
-            {"body": {
-                "reminder_date": reminder_date,
-                "schedule_slot": schedule_slot,
-                "telegram_user_id": int(user["telegram_user_id"]),
-                "chat_id": int(user["private_chat_id"]),
-                "text": message,
-                "parse_mode": "Markdown" if schedule_slot == "06:00" else None,
-                "reply_markup": reminder_keyboard(
-                    getattr(self.env, "MINI_APP_URL", ""), int(plan["plan_day"])
-                ),
-            }}
-            for user in users
-        ]
-        try:
-            await self.env.REMINDER_QUEUE.sendBatch(batch)
-        except Exception as exc:
-            print(f"reminder_queue_publish_failed error={type(exc).__name__}")
-            raise
-        await self.env.DB.prepare(
-            "UPDATE reminder_runs SET last_user_id = ? "
-            "WHERE reminder_date = ? AND schedule_slot = ?"
-        ).bind(users[-1]["telegram_user_id"], reminder_date, schedule_slot).run()
-        print(f"reminder_queue_published count={len(batch)} date={reminder_date} slot={schedule_slot}")
+        last_user_id = int(run["last_user_id"])
+        while True:
+            recipients = await self.env.DB.prepare(
+                "SELECT telegram_user_id, private_chat_id FROM users "
+                "WHERE private_chat_id IS NOT NULL AND telegram_user_id > ? "
+                "ORDER BY telegram_user_id LIMIT 100"
+            ).bind(last_user_id).all()
+            users = tuple(recipients.results) if recipients else ()
+            if not users:
+                await self.env.DB.prepare(
+                    "UPDATE reminder_runs SET finished = 1 "
+                    "WHERE reminder_date = ? AND schedule_slot = ?"
+                ).bind(reminder_date, schedule_slot).run()
+                print(f"reminder_cron_finished date={reminder_date} slot={schedule_slot}")
+                return
+
+            insert_statements = [
+                self.env.DB.prepare(
+                    "INSERT OR IGNORE INTO reminder_deliveries "
+                    "(reminder_date, schedule_slot, telegram_user_id, plan_day, status) "
+                    "VALUES (?, ?, ?, ?, 'queued')"
+                ).bind(reminder_date, schedule_slot, user["telegram_user_id"], plan["plan_day"])
+                for user in users
+            ]
+            await self.env.DB.batch(insert_statements)
+            batch = [
+                {"body": {
+                    "reminder_date": reminder_date,
+                    "schedule_slot": schedule_slot,
+                    "telegram_user_id": int(user["telegram_user_id"]),
+                    "chat_id": int(user["private_chat_id"]),
+                    "text": message,
+                    "parse_mode": "Markdown" if schedule_slot == "06:00" else None,
+                    "reply_markup": reminder_keyboard(
+                        getattr(self.env, "MINI_APP_URL", ""), int(plan["plan_day"])
+                    ),
+                }}
+                for user in users
+            ]
+            try:
+                await self.env.REMINDER_QUEUE.sendBatch(batch)
+            except Exception as exc:
+                print(f"reminder_queue_publish_failed error={type(exc).__name__}")
+                raise
+            last_user_id = int(users[-1]["telegram_user_id"])
+            await self.env.DB.prepare(
+                "UPDATE reminder_runs SET last_user_id = ? "
+                "WHERE reminder_date = ? AND schedule_slot = ?"
+            ).bind(last_user_id, reminder_date, schedule_slot).run()
+            print(
+                f"reminder_queue_published count={len(batch)} "
+                f"date={reminder_date} slot={schedule_slot}"
+            )
 
     async def queue(self, batch, env, ctx):
         """Deliver queued reminders independently and retry transient failures."""
