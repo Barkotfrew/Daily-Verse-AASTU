@@ -1230,17 +1230,18 @@ class Default(WorkerEntrypoint):
                 "◉ Current shared reading · not yet completed by you" if current else
                 "· Upcoming reading" if upcoming else "○ Not completed yet"
             )
+            if upcoming:
+                status += "\nYou can preview this reading now; completion opens on its scheduled day."
             text = (
                 f"My Reading Journey · Day {day}\n{entry['ethiopian_date']} · "
                 f"{entry['gregorian_date']}\n{entry['reading']}\n\n{status}"
             )
             rows = []
-            if not upcoming:
-                reader = self._reader_keyboard(day)
-                if reader:
-                    rows.extend(reader["inline_keyboard"])
-                if not completed:
-                    rows.append([reading_session_button(day, session_started=session is not None)])
+            reader = self._reader_keyboard(day)
+            if reader:
+                rows.extend(reader["inline_keyboard"])
+            if not upcoming and not completed:
+                rows.append([reading_session_button(day, session_started=session is not None)])
             rows.extend([
                 [{"text": "← Reading Timeline", "callback_data": f"journey:timeline:{(day - 1) // 6 + 1}"}],
                 [{"text": "My Reading Journey", "callback_data": "journey:home"}],

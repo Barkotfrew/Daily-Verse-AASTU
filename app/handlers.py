@@ -555,15 +555,16 @@ def build_router(
             current = entry_for_date(plan, today)
             upcoming = entry.gregorian_date > today
             status = "✓ Completed by you" if completed else "◌ Five-minute reading timer running" if session_started else "◉ Current shared reading · not yet completed by you" if current and day == current.day else "· Upcoming reading" if upcoming else "○ Not completed yet"
+            if upcoming:
+                status += "\nYou can preview this reading now; completion opens on its scheduled day."
             text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
             rows = []
-            if not upcoming:
-                rows.append([_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")])
-                if not completed:
-                    rows.append([InlineKeyboardButton(
-                        text="Mark as Read" if session_started else "Start 5-minute reading",
-                        callback_data=f"session:finish:{day}" if session_started else f"session:start:{day}",
-                    )])
+            rows.append([_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")])
+            if not upcoming and not completed:
+                rows.append([InlineKeyboardButton(
+                    text="Mark as Read" if session_started else "Start 5-minute reading",
+                    callback_data=f"session:finish:{day}" if session_started else f"session:start:{day}",
+                )])
             rows.append([InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")])
             rows.append([InlineKeyboardButton(text="My Reading Journey", callback_data="journey:home")])
             markup = InlineKeyboardMarkup(inline_keyboard=rows)
