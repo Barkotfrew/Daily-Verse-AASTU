@@ -591,8 +591,8 @@ def journey_progress_message(
 ) -> str:
     """Render a restrained, personal reading-plan summary."""
     percentage = completed / total if total else 0
-    filled = round(percentage * 10)
-    bar = "■" * filled + "·" * (10 - filled)
+    filled = min(33, max(0, round(percentage * 33)))
+    bar = "▰" * filled + "□" * (33 - filled)
     if current_entry is None:
         current = "No reading is scheduled for today."
     else:
@@ -604,15 +604,16 @@ def journey_progress_message(
     return (
         "DAILY VERSE · PERSONAL RECORD\n"
         "My Reading Journey\n\n"
-        f"{completed} of {total} shared-plan readings completed\n"
-        f"{bar}  {percentage:.0%}\n"
+        "SHARED PLAN\n"
+        f"{completed} / {total} readings · {percentage:.0%}\n"
+        f"{bar}\n"
         "Progress follows the shared reading plan.\n\n"
         "CURRENT SHARED READING\n"
         f"{current}\n\n"
         "YOUR RECORD\n"
-        f"Completed readings · {completed}\n"
-        f"This week · {week_count}\n"
-        f"Bible books visited · {books_visited}\n\n"
+        f"Completed readings  │  {completed}\n"
+        f"This week           │  {week_count}\n"
+        f"Bible books visited │  {books_visited}\n\n"
         f"{streak}"
     )
 
