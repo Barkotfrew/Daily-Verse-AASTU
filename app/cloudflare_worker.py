@@ -874,7 +874,10 @@ class Default(WorkerEntrypoint):
                         streak=streak_progress_text(current_streak, best_streak),
                     )
                     reply_markup = MAIN_MENU
-                await self._send_message(chat_id, response_message, reply_markup)
+                await self._send_message(
+                    chat_id, response_message, reply_markup,
+                    parse_mode="HTML" if command == "progress" else None,
+                )
 
             return Response("OK")
 
@@ -1157,7 +1160,9 @@ class Default(WorkerEntrypoint):
 
         if data == "journey:home":
             text, keyboard = await self._journey_progress(user["id"])
-            await self._edit_message(chat["id"], message["message_id"], text, keyboard)
+            await self._edit_message(
+                chat["id"], message["message_id"], text, keyboard, parse_mode="HTML"
+            )
             return True
         journey_home_keyboard = {
             "inline_keyboard": [[
@@ -1573,16 +1578,16 @@ class Default(WorkerEntrypoint):
             {"callback_query_id": callback_id, "text": text, "show_alert": show_alert},
         )
 
-    async def _edit_message(self, chat_id, message_id, text, reply_markup):
-        await self._telegram_request(
-            "editMessageText",
-            {
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "text": text,
-                "reply_markup": reply_markup,
-            },
-        )
+    async def _edit_message(self, chat_id, message_id, text, reply_markup, parse_mode=None):
+        payload = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "reply_markup": reply_markup,
+        }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        await self._telegram_request("editMessageText", payload)
 
     async def _edit_reply_markup(self, chat_id, message_id, reply_markup):
         await self._telegram_request(
@@ -1591,10 +1596,12 @@ class Default(WorkerEntrypoint):
              "reply_markup": reply_markup},
         )
 
-    async def _send_message(self, chat_id: int, text: str, reply_markup: dict | None = None):
+    async def _send_message(self, chat_id: int, text: str, reply_markup: dict | None = None, parse_mode=None):
         payload = {"chat_id": chat_id, "text": text}
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         await self._telegram_request("sendMessage", payload)
 
     async def _telegram_request(self, method, payload):

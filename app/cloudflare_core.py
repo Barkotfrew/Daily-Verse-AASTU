@@ -1,6 +1,7 @@
 """Pure helpers shared by Cloudflare Worker handlers and offline tests."""
 
 from datetime import date, datetime, timedelta, timezone
+from html import escape
 import hmac
 from typing import Any
 from urllib.parse import urlencode
@@ -593,6 +594,23 @@ def journey_progress_message(
     percentage = completed / total if total else 0
     filled = min(33, max(0, round(percentage * 33)))
     bar = "▰" * filled + "□" * (33 - filled)
+    records = (
+        ("Completed readings", completed),
+        ("This week", week_count),
+        ("Bible books visited", books_visited),
+    )
+    label_width = max(len("Reading"), *(len(label) for label, _value in records))
+    count_width = max(len("Count"), *(len(str(value)) for _label, value in records))
+    border = "┌" + "─" * (label_width + 2) + "┬" + "─" * (count_width + 2) + "┐"
+    divider = "├" + "─" * (label_width + 2) + "┼" + "─" * (count_width + 2) + "┤"
+    bottom = "└" + "─" * (label_width + 2) + "┴" + "─" * (count_width + 2) + "┘"
+    record_rows = "\n".join((
+        border,
+        f"│ {'Reading':<{label_width}} │ {'Count':>{count_width}} │",
+        divider,
+        *(f"│ {label:<{label_width}} │ {value:>{count_width}} │" for label, value in records),
+        bottom,
+    ))
     if current_entry is None:
         current = "No reading is scheduled for today."
     else:
@@ -602,19 +620,19 @@ def journey_progress_message(
         status = "You’ve completed this reading." if current_completed else "This reading is still open for you."
         current = f"Day {day} · {ethiopian_date}\n{reading}\n{status}"
     return (
-        "DAILY VERSE · PERSONAL RECORD\n"
         "My Reading Journey\n\n"
         "SHARED PLAN\n"
         f"{completed} / {total} readings · {percentage:.0%}\n"
         f"{bar}\n"
-        "Progress follows the shared reading plan.\n\n"
+        "Progress follows the shared reading plan.\n"
+        "\n\n──────────────────────\n\n"
         "CURRENT SHARED READING\n"
-        f"{current}\n\n"
+        f"{escape(current)}\n"
+        "\n\n──────────────────────\n\n"
         "YOUR RECORD\n"
-        f"Completed readings  │  {completed}\n"
-        f"This week           │  {week_count}\n"
-        f"Bible books visited │  {books_visited}\n\n"
-        f"{streak}"
+        f"<pre>{record_rows}</pre>\n"
+        "\n\n──────────────────────\n\n"
+        f"{escape(streak)}"
     )
 
 

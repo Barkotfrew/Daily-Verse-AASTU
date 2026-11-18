@@ -585,7 +585,10 @@ def build_router(
         else:
             await callback.message.edit_text("That journey action is unavailable.")
             return
-        await callback.message.edit_text(text, reply_markup=markup)
+        await callback.message.edit_text(
+            text, reply_markup=markup,
+            parse_mode="HTML" if data == "journey:home" else None,
+        )
 
     @router.callback_query(F.data.startswith("plan:"))
     async def browse_plan(callback: CallbackQuery) -> None:
@@ -753,7 +756,7 @@ def build_router(
         if message.from_user is None:
             return
         text, markup = journey_summary(message.from_user.id)
-        await message.answer(text, reply_markup=markup)
+        await message.answer(text, reply_markup=markup, parse_mode="HTML")
 
     async def send_journal(message: Message) -> None:
         if message.chat.type != "private":
