@@ -123,7 +123,7 @@ def reading_session_button(
         return {"text": "✅ Reading complete", "callback_data": f"session:finish:{day}"}
     if session_started:
         return {"text": "Mark as Read", "callback_data": f"session:finish:{day}"}
-    return {"text": "Start 5-minute reading", "callback_data": f"session:start:{day}"}
+    return {"text": "Start reading", "callback_data": f"session:start:{day}"}
 
 
 def today_keyboard(

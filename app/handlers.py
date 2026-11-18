@@ -188,7 +188,7 @@ def _entry_keyboard(
         )])
     rows.extend([
         [InlineKeyboardButton(
-            text="✅ Reading complete" if completed else "Mark as Read" if session_started else "Start 5-minute reading",
+            text="✅ Reading complete" if completed else "Mark as Read" if session_started else "Start reading",
             callback_data=f"session:finish:{day}" if completed or session_started else f"session:start:{day}",
         )],
         [InlineKeyboardButton(
@@ -227,7 +227,7 @@ def _plan_keyboard(
             )],
             [
                 InlineKeyboardButton(
-                    text="✅ Reading complete" if completed else "Mark as Read" if session_started else "Start 5-minute reading",
+                    text="✅ Reading complete" if completed else "Mark as Read" if session_started else "Start reading",
                     callback_data=f"session:finish:{day}" if completed or session_started else f"session:start:{day}",
                 ),
                 _read_chapters_button(day, mini_app_url, in_private_chat),
@@ -562,7 +562,7 @@ def build_router(
             rows.append([_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")])
             if not upcoming and not completed:
                 rows.append([InlineKeyboardButton(
-                    text="Mark as Read" if session_started else "Start 5-minute reading",
+                    text="Mark as Read" if session_started else "Start reading",
                     callback_data=f"session:finish:{day}" if session_started else f"session:start:{day}",
                 )])
             rows.append([InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")])
