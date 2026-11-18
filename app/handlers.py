@@ -83,6 +83,7 @@ from app.cloudflare_core import (
     format_leaderboard_page,
     leaderboard_keyboard,
     LEADERBOARD_PAGE_SIZE,
+    leaderboard_launch_day,
     journey_progress_message,
     journey_timeline_keyboard,
     journey_timeline_page,
@@ -493,7 +494,9 @@ def build_router(
             current_plan_day = plan.final_day
         else:
             current_plan_day = plan.final_day + 2
-        current_streak, best_streak = streak_counts(days, current_plan_day)
+        launch_day = leaderboard_launch_day(plan.entries)
+        streak_days = tuple(day for day in days if day >= launch_day)
+        current_streak, best_streak = streak_counts(streak_days, current_plan_day)
         text = journey_progress_message(
             len(days), plan.total_days, completed_this_eat_week(records),
             books_visited_count(plan.entries, days), current_entry,

@@ -16,6 +16,8 @@ except ModuleNotFoundError as exc:
 EAT = timezone(timedelta(hours=3), name="EAT")
 JOURNEY_PAGE_SIZE = 6
 READING_SESSION_MIN_SECONDS = 5 * 60
+LEADERBOARD_LAUNCH_DATE = "2026-11-18"
+LEADERBOARD_LAUNCH_PLAN_DAY = 39
 
 
 def page_for_day(day: int, page_size: int = 14) -> int:
@@ -25,10 +27,11 @@ def page_for_day(day: int, page_size: int = 14) -> int:
     return (day - 1) // page_size + 1
 
 
-LEADERBOARD_QUERY = """SELECT u.display_name, u.academic_year,
+LEADERBOARD_QUERY = f"""SELECT u.display_name, u.academic_year,
        COUNT(c.plan_day) AS completed
 FROM users AS u LEFT JOIN reading_completions AS c
   ON c.telegram_user_id = u.telegram_user_id
+ AND c.plan_day >= {LEADERBOARD_LAUNCH_PLAN_DAY}
 WHERE u.leaderboard_opt_in = 1
   AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
   AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
@@ -37,10 +40,11 @@ GROUP BY u.telegram_user_id, u.display_name, u.academic_year
 ORDER BY completed DESC, u.display_name COLLATE NOCASE, u.telegram_user_id
 LIMIT 10"""
 
-LEADERBOARD_POSITION_QUERY = """WITH scores AS (
+LEADERBOARD_POSITION_QUERY = f"""WITH scores AS (
     SELECT u.telegram_user_id, u.display_name, COUNT(c.plan_day) AS completed
     FROM users AS u LEFT JOIN reading_completions AS c
       ON c.telegram_user_id = u.telegram_user_id
+     AND c.plan_day >= {LEADERBOARD_LAUNCH_PLAN_DAY}
     WHERE u.leaderboard_opt_in = 1
       AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
       AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
@@ -281,7 +285,8 @@ def leaderboard_sql(period: str, *, paged: bool = False, selected_user: bool = F
         SELECT u.telegram_user_id, u.display_name, u.academic_year,
                COUNT(c.plan_day) AS completed
         FROM users AS u LEFT JOIN reading_completions AS c
-          ON c.telegram_user_id = u.telegram_user_id{cutoff}
+          ON c.telegram_user_id = u.telegram_user_id
+         AND c.plan_day >= {LEADERBOARD_LAUNCH_PLAN_DAY}{cutoff}
         WHERE u.leaderboard_opt_in = 1
           AND u.display_name IS NOT NULL AND trim(u.display_name) != ''
           AND u.academic_year IS NOT NULL AND trim(u.academic_year) != ''
@@ -296,6 +301,18 @@ def leaderboard_sql(period: str, *, paged: bool = False, selected_user: bool = F
     SELECT telegram_user_id, display_name, academic_year, completed, position
     FROM ranked {selector}
     ORDER BY position {page_clause}"""
+
+
+def leaderboard_launch_day(entries) -> int:
+    """Return the first scheduled plan day on or after the public launch date."""
+    launch_date = date.fromisoformat(LEADERBOARD_LAUNCH_DATE)
+    eligible = []
+    for entry in entries:
+        day = entry.get("plan_day", entry.get("day")) if isinstance(entry, dict) else entry.day
+        scheduled = entry.get("gregorian_date") if isinstance(entry, dict) else entry.gregorian_date
+        if date.fromisoformat(str(scheduled)) >= launch_date:
+            eligible.append(int(day))
+    return min(eligible) if eligible else LEADERBOARD_LAUNCH_PLAN_DAY
 
 
 def leaderboard_keyboard(period: str, page: int, total: int) -> dict[str, Any]:

@@ -25,8 +25,10 @@ except ModuleNotFoundError as exc:
     from streaks import streak_counts, streak_progress_text
 from cloudflare_core import (
     LEADERBOARD_PAGE_SIZE,
+    LEADERBOARD_LAUNCH_PLAN_DAY,
     leaderboard_cutoff_utc,
     leaderboard_sql,
+    leaderboard_launch_day,
     current_eat_date,
     completed_this_eat_week,
     books_visited_count,
@@ -864,8 +866,11 @@ class Default(WorkerEntrypoint):
                             if latest_plan_day
                             else 0
                         )
+                    streak_days = tuple(
+                        day for day in completed_days if day >= LEADERBOARD_LAUNCH_PLAN_DAY
+                    )
                     current_streak, best_streak = streak_counts(
-                        completed_days, current_plan_day
+                        streak_days, current_plan_day
                     )
                     response_message = format_progress_message(
                         int(stats["completed"]) if stats else 0,
@@ -916,7 +921,9 @@ class Default(WorkerEntrypoint):
                 int(previous["plan_day"]) + (today - date.fromisoformat(previous["gregorian_date"])).days
                 if previous else 0
             )
-        current_streak, best_streak = streak_counts(completed_days, current_plan_day)
+        launch_day = leaderboard_launch_day(entries)
+        streak_days = tuple(day for day in completed_days if day >= launch_day)
+        current_streak, best_streak = streak_counts(streak_days, current_plan_day)
         text = journey_progress_message(
             len(completed_days), total,
             completed_this_eat_week(records),
