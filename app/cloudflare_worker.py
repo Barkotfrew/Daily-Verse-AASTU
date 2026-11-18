@@ -1000,7 +1000,7 @@ class Default(WorkerEntrypoint):
             session_started = True
             await self._answer_callback(
                 callback_id,
-                "⏱ Five-minute reading timer started. Mark as Read will be available when the time is up.",
+                "⏱ Your 5-minute reading time has started. Read in the Mini App or from a hard copy; your choice! Mark as Read unlocks when the time is up.",
                 True,
             )
         else:

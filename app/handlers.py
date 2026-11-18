@@ -649,7 +649,7 @@ def build_router(
             start_reading_session(database_path, callback.from_user.id, day)
             await _answer_callback(
                 callback,
-                "⏱ Five-minute reading timer started. Mark as Read will be available when the time is up.",
+                "⏱ Your 5-minute reading time has started. Read in the Mini App or from a hard copy; your choice! Mark as Read unlocks when the time is up.",
                 show_alert=True,
             )
             if callback.message:
