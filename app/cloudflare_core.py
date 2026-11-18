@@ -630,7 +630,7 @@ def journey_progress_message(
         f"{escape(current)}\n"
         "\n\n──────────────────────\n\n"
         "YOUR RECORD\n"
-        f"{record_rows}\n"
+        f"<pre>{record_rows}</pre>\n"
         "\n\n──────────────────────\n\n"
         f"{escape(streak)}"
     )
