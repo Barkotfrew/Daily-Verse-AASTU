@@ -999,7 +999,9 @@ class Default(WorkerEntrypoint):
             ).bind(user_id, day, int(time.time())).run()
             session_started = True
             await self._answer_callback(
-                callback_id, "Session started. Read from your hardcopy, then come back to finish."
+                callback_id,
+                "⏱ Five-minute reading timer started. Mark as Read will be available when the time is up.",
+                True,
             )
         else:
             session = await self.env.DB.prepare(
@@ -1013,7 +1015,8 @@ class Default(WorkerEntrypoint):
             if elapsed < READING_SESSION_MIN_SECONDS:
                 await self._answer_callback(
                     callback_id,
-                    "You’re still in your reading session 📖 Come back to this step after spending time with today’s chapters.",
+                    "⏳ Your five-minute reading time is still running. Come back when it’s finished, then tap Mark as Read.",
+                    True,
                 )
                 return True
             await self.env.DB.prepare(
@@ -1023,9 +1026,9 @@ class Default(WorkerEntrypoint):
             await self.env.DB.prepare(
                 "DELETE FROM reading_sessions WHERE telegram_user_id = ? AND plan_day = ?"
             ).bind(user_id, day).run()
-            session_started = False
             completed = True
-            await self._answer_callback(callback_id, "Reading marked complete. Well done!")
+            session_started = False
+            await self._answer_callback(callback_id, "✅ Five-minute reading time complete. Your reading is now marked as read.", True)
 
         is_journey = data.startswith("journey:") or str(message.get("text", "")).startswith("My Reading Journey · Day")
         is_today = str(message.get("text", "")).startswith("📖 TODAY’S READING")
@@ -1036,7 +1039,7 @@ class Default(WorkerEntrypoint):
             ).bind(day, today.isoformat()).first()
             status = (
                 "✓ Completed by you" if completed else
-                "◌ Reading session in progress" if session_started else
+                "◌ Five-minute reading timer running" if session_started else
                 "◉ Current shared reading · not yet completed by you" if current else
                 "○ Not completed yet"
             )
@@ -1218,7 +1221,7 @@ class Default(WorkerEntrypoint):
             ).bind(day, today.isoformat()).first()
             status = (
                 "✓ Completed by you" if completed else
-                "◌ Reading session in progress" if session else
+                    "◌ Reading session in progress" if session else
                 "◉ Current shared reading · not yet completed by you" if current else
                 "· Upcoming reading" if upcoming else "○ Not completed yet"
             )

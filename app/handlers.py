@@ -77,6 +77,7 @@ from app.readings import (
 from app.cloudflare_core import (
     JOURNEY_PAGE_SIZE,
     READING_SESSION_MIN_SECONDS,
+    supported_command,
     books_visited_count,
     completed_this_eat_week,
     format_leaderboard_page,
@@ -187,8 +188,8 @@ def _entry_keyboard(
         )])
     rows.extend([
         [InlineKeyboardButton(
-            text="✅ Reading complete" if completed else "Finish reading" if session_started else "Start reading",
-            callback_data=f"session:finish:{day}" if session_started or completed else f"session:start:{day}",
+            text="✅ Reading complete" if completed else "Mark as Read" if session_started else "Start 5-minute reading",
+            callback_data=f"session:finish:{day}" if completed or session_started else f"session:start:{day}",
         )],
         [InlineKeyboardButton(
             text="🗓 View Reading Plan",
@@ -226,8 +227,8 @@ def _plan_keyboard(
             )],
             [
                 InlineKeyboardButton(
-                    text="✅ Reading complete" if completed else "Finish reading" if session_started else "Start reading",
-                    callback_data=f"session:finish:{day}" if session_started or completed else f"session:start:{day}",
+                    text="✅ Reading complete" if completed else "Mark as Read" if session_started else "Start 5-minute reading",
+                    callback_data=f"session:finish:{day}" if completed or session_started else f"session:start:{day}",
                 ),
                 _read_chapters_button(day, mini_app_url, in_private_chat),
             ],
@@ -239,10 +240,15 @@ def _set_session_button(markup, day: int, state: str):
     if markup is None:
         return markup
     text = {
-        "started": "Finish reading",
+        "reading": "Finish reading",
+        "started": "Mark as Read",
         "completed": "✅ Reading complete",
     }.get(state, "Start reading")
-    callback_data = f"session:finish:{day}" if state in {"started", "completed"} else f"session:start:{day}"
+    callback_data = {
+        "reading": f"session:finish:{day}",
+        "started": f"session:finish:{day}",
+        "completed": f"session:finish:{day}",
+    }.get(state, f"session:start:{day}")
     rows = []
     for row in markup.inline_keyboard:
         updated = []
@@ -303,10 +309,9 @@ def build_router(
             )
             return
         completed = entry.day in completed_days(database_path, message.from_user.id)
-        session_started = (
-            not completed
-            and reading_session_elapsed(database_path, message.from_user.id, entry.day) is not None
-        )
+        session_started = not completed and reading_session_elapsed(
+            database_path, message.from_user.id, entry.day
+        ) is not None
         status = (
             "\n\n✅ You’ve marked this reading complete. Well done!"
             if completed
@@ -543,21 +548,20 @@ def build_router(
                 await callback.message.edit_text("That reading entry is unavailable.")
                 return
             completed = day in completed_days(database_path, callback.from_user.id)
-            session_started = (
-                not completed
-                and reading_session_elapsed(database_path, callback.from_user.id, day) is not None
-            )
+            session_started = not completed and reading_session_elapsed(
+                database_path, callback.from_user.id, day
+            ) is not None
             today = eat_date()
             current = entry_for_date(plan, today)
             upcoming = entry.gregorian_date > today
-            status = "✓ Completed by you" if completed else "◌ Reading session in progress" if session_started else "◉ Current shared reading · not yet completed by you" if current and day == current.day else "· Upcoming reading" if upcoming else "○ Not completed yet"
+            status = "✓ Completed by you" if completed else "◌ Five-minute reading timer running" if session_started else "◉ Current shared reading · not yet completed by you" if current and day == current.day else "· Upcoming reading" if upcoming else "○ Not completed yet"
             text = f"My Reading Journey · Day {day}\n{entry.ethiopian_date} · {entry.gregorian_date.isoformat()}\n{entry.reading}\n\n{status}"
             rows = []
             if not upcoming:
                 rows.append([_read_chapters_button(day, mini_app_url, callback.message.chat.type == "private")])
                 if not completed:
                     rows.append([InlineKeyboardButton(
-                        text="Finish reading" if session_started else "Start reading",
+                        text="Mark as Read" if session_started else "Start 5-minute reading",
                         callback_data=f"session:finish:{day}" if session_started else f"session:start:{day}",
                     )])
             rows.append([InlineKeyboardButton(text="← Reading Timeline", callback_data=f"journey:timeline:{page_for_day(day, JOURNEY_PAGE_SIZE)}")])
@@ -597,10 +601,9 @@ def build_router(
         await _answer_callback(callback)
         if callback.message:
             completed = day in completed_days(database_path, callback.from_user.id) if callback.from_user else False
-            session_started = (
-                not completed and callback.from_user is not None
-                and reading_session_elapsed(database_path, callback.from_user.id, day) is not None
-            )
+            session_started = not completed and callback.from_user is not None and reading_session_elapsed(
+                database_path, callback.from_user.id, day
+            ) is not None
             await callback.message.edit_text(
                 "Reading Plan · selected day\n" + format_reading_entry(entry),
                 reply_markup=_plan_keyboard(
@@ -644,9 +647,13 @@ def build_router(
             return
         if action == "start":
             start_reading_session(database_path, callback.from_user.id, day)
-            await _answer_callback(callback, "Session started. Read from your hardcopy, then come back to finish.")
+            await _answer_callback(
+                callback,
+                "⏱ Five-minute reading timer started. Mark as Read will be available when the time is up.",
+                show_alert=True,
+            )
             if callback.message:
-                markup = _set_session_button(callback.message.reply_markup, day, "started")
+                markup = _set_session_button(callback.message.reply_markup, day, "reading")
                 await callback.message.edit_reply_markup(reply_markup=markup)
             return
 
@@ -655,14 +662,18 @@ def build_router(
             await _answer_callback(callback, "Start your reading session first.", show_alert=True)
             return
         if elapsed < READING_SESSION_MIN_SECONDS:
-            await _answer_callback(
-                callback,
-                "You’re still in your reading session 📖 Come back to this step after spending time with today’s chapters.",
-            )
+            await _answer_callback(callback,
+                "⏳ Your five-minute reading time is still running. Come back when it’s finished, then tap Mark as Read.",
+                show_alert=True)
             return
         inserted = mark_read(database_path, callback.from_user.id, day)
         clear_reading_session(database_path, callback.from_user.id, day)
-        await _answer_callback(callback, "Reading marked complete. Well done!" if inserted else "This reading is already complete.")
+        await _answer_callback(
+            callback,
+            "✅ Five-minute reading time complete. Your reading is now marked as read."
+            if inserted else "This reading is already complete.",
+            show_alert=True,
+        )
         if callback.message:
             markup = _set_session_button(callback.message.reply_markup, day, "completed")
             message_text = callback.message.text or ""
@@ -678,6 +689,8 @@ def build_router(
                     "○ Not completed yet", "✓ Completed by you"
                 ).replace(
                     "◉ Current shared reading · not yet completed by you", "✓ Completed by you"
+                ).replace(
+                    "◌ Five-minute reading timer running", "✓ Completed by you"
                 )
                 await callback.message.edit_text(
                     updated_text, reply_markup=markup,
