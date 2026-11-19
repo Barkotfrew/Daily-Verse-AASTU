@@ -76,6 +76,38 @@ from messages import (
     WELCOME_INTRO,
     HELP_COMMANDS,
 )
+
+
+def _safe_telegram_description(value):
+    """Keep Telegram's short error description, without control chars or payload data."""
+    return " ".join(str(value or "Telegram API error").split())[:180]
+
+
+class TelegramAPIError(RuntimeError):
+    def __init__(self, method, status, description):
+        self.method = method
+        self.status = int(status)
+        self.description = _safe_telegram_description(description)
+        super().__init__(f"Telegram {method} failed with HTTP {self.status}: {self.description}")
+
+    @property
+    def retryable(self):
+        return self.status == 429 or 500 <= self.status < 600
+
+
+def _is_ignorable_telegram_error(error):
+    description = error.description.casefold()
+    if error.method == "answerCallbackQuery":
+        return any(phrase in description for phrase in (
+            "query is too old", "query id is invalid", "query_id is invalid",
+        ))
+    if error.method in {"editMessageText", "editMessageReplyMarkup"}:
+        return any(phrase in description for phrase in (
+            "message is not modified", "message to edit not found", "message can't be edited",
+        ))
+    return False
+
+
 PROFILE_EDIT_PROMPTS = {
     "display_name": "Enter your full name: first name followed by your father's name (2–64 characters).",
     "academic_year": "Send your year of study (for example, 2 or 2nd year).",
@@ -449,16 +481,26 @@ class Default(WorkerEntrypoint):
                         telegram_payload["parse_mode"] = body["parse_mode"]
                     await self._telegram_request("sendMessage", telegram_payload)
                 except Exception as exc:
-                    print(f"reminder_telegram_failed error={type(exc).__name__}")
+                    if isinstance(exc, TelegramAPIError):
+                        failure_reason = f"HTTP {exc.status}: {exc.description}"
+                        print(
+                            "reminder_telegram_failed "
+                            f"http={exc.status} retryable={exc.retryable} "
+                            f"description={exc.description}"
+                        )
+                    else:
+                        failure_reason = f"Delivery error: {type(exc).__name__}"
+                        print(f"reminder_telegram_failed error={type(exc).__name__}")
                     failed += 1
                     await self.env.DB.prepare(
                         "UPDATE reminder_deliveries SET status = 'failed', "
-                        "last_error = 'Telegram delivery failed' "
+                        "last_error = ? "
                         "WHERE reminder_date = ? AND telegram_user_id = ? "
                         "AND schedule_slot = ? "
                         "AND status = 'sent'"
-                    ).bind(reminder_date, user_id, schedule_slot).run()
-                    if int(getattr(message, "attempts", 1)) < 5:
+                    ).bind(failure_reason[:220], reminder_date, user_id, schedule_slot).run()
+                    should_retry = not isinstance(exc, TelegramAPIError) or exc.retryable
+                    if should_retry and int(getattr(message, "attempts", 1)) < 5:
                         message.retry(delaySeconds=120)
                     else:
                         message.ack()
@@ -1581,10 +1623,14 @@ class Default(WorkerEntrypoint):
         )
 
     async def _answer_callback(self, callback_id, text="", show_alert=False):
-        await self._telegram_request(
-            "answerCallbackQuery",
-            {"callback_query_id": callback_id, "text": text, "show_alert": show_alert},
-        )
+        try:
+            await self._telegram_request(
+                "answerCallbackQuery",
+                {"callback_query_id": callback_id, "text": text, "show_alert": show_alert},
+            )
+        except TelegramAPIError as error:
+            if not _is_ignorable_telegram_error(error):
+                raise
 
     async def _edit_message(self, chat_id, message_id, text, reply_markup, parse_mode=None):
         payload = {
@@ -1595,14 +1641,22 @@ class Default(WorkerEntrypoint):
         }
         if parse_mode:
             payload["parse_mode"] = parse_mode
-        await self._telegram_request("editMessageText", payload)
+        try:
+            await self._telegram_request("editMessageText", payload)
+        except TelegramAPIError as error:
+            if not _is_ignorable_telegram_error(error):
+                raise
 
     async def _edit_reply_markup(self, chat_id, message_id, reply_markup):
-        await self._telegram_request(
-            "editMessageReplyMarkup",
-            {"chat_id": chat_id, "message_id": message_id,
-             "reply_markup": reply_markup},
-        )
+        try:
+            await self._telegram_request(
+                "editMessageReplyMarkup",
+                {"chat_id": chat_id, "message_id": message_id,
+                 "reply_markup": reply_markup},
+            )
+        except TelegramAPIError as error:
+            if not _is_ignorable_telegram_error(error):
+                raise
 
     async def _send_message(self, chat_id: int, text: str, reply_markup: dict | None = None, parse_mode=None):
         payload = {"chat_id": chat_id, "text": text}
@@ -1624,5 +1678,5 @@ class Default(WorkerEntrypoint):
         )
         result = await response.json()
         if not response.ok or not result.get("ok"):
-            # Do not log the token-bearing URL or Telegram's raw response body.
-            raise RuntimeError(f"Telegram {method} failed with HTTP {response.status}")
+            # Keep safe API metadata only; never log the token-bearing URL or payload.
+            raise TelegramAPIError(method, response.status, result.get("description"))
